@@ -37,7 +37,6 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -282,17 +281,12 @@ fun rememberOvalsAnimation(
 
     LaunchedEffect(Unit) {
         val start = withFrameNanos { it }
-        var lastShown = start
         while (true) {
-            withFrameNanos { now ->
-                // Обновляем картинку ~30 раз в секунду: движение остаётся плавным,
-                // а нагрузка на GPU падает вдвое (на мониторах 120/144 Гц — в 4–5 раз).
-                // Позиции считаются от абсолютного времени, поэтому ход анимации не меняется.
-                if (now - lastShown >= 33_333_333L) {
-                    clock.longValue = now - start
-                    lastShown = now
-                }
-            }
+            // Часы обновляются на КАЖДЫЙ кадр. Ранний троттлинг до ~30 fps давал рывки:
+            // шаг ~2 dp виден глазу, а на 60 Гц длительности кадров чередуются 33/50 мс.
+            // Значение читается только в фазе отрисовки Canvas (без рекомпозиций),
+            // а тяжёлого blur на каждый кадр нет — спрайты отрисованы заранее.
+            withFrameNanos { now -> clock.longValue = now - start }
         }
     }
 
@@ -336,12 +330,15 @@ fun OvalsCanvas(
                 val delta = phase + k * period
                 val x = sp.cx + sp.ux * delta - sp.width / 2.0 - designTopLeft.x
                 val y = sp.cy + sp.uy * delta - sp.height / 2.0 - designTopLeft.y
+                // Субпиксельная позиция через translate: округление dstOffset до целых
+                // пикселей при масштабе окна ≠ 1 даёт видимые шаги и микродрожание краёв.
                 // dstSize: обычные спрайты рисуются 1:1, а стеклянные (¼ разрешения) растягиваются.
-                drawImage(
-                    image = sp.image,
-                    dstOffset = IntOffset((x * d).roundToInt(), (y * d).roundToInt()),
-                    dstSize = IntSize((sp.width * d).roundToInt(), (sp.height * d).roundToInt()),
-                )
+                withTransform({ translate((x * d).toFloat(), (y * d).toFloat()) }) {
+                    drawImage(
+                        image = sp.image,
+                        dstSize = IntSize((sp.width * d).roundToInt(), (sp.height * d).roundToInt()),
+                    )
+                }
             }
         }
     }
