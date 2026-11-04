@@ -58,8 +58,8 @@ class ScoreKeeperColors(
 /** Светлая тема. Тёмную добавим отдельным объектом ScoreKeeperColors(...) по тёмным макетам. */
 val LightColors = ScoreKeeperColors(
     canvas = Color.White,
-    glassFill = Color(0x33FFF8D1),          // rgba(255,248,209,0.2)
-    glassBorder = Color(0x1CAAA6A6),        // rgba(170,166,166,0.11)
+    glassFill = Color(0x73FFF8D1),          // rgba(255,248,209,0.45) — стекло менее прозрачное
+    glassBorder = Color(0x33AAA6A6),        // rgba(170,166,166,0.2)
     buttonStart = Color(0xFF1D6FF7),
     buttonEnd = Color(0xFF6B8EC7),
     buttonGlow = Color(0xFF2171F4),
@@ -111,7 +111,8 @@ val DefaultTypography = ScoreKeeperTypography(
         fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
         fontSize = 32.sp,
     ),
-    chip = TextStyle(fontSize = 13.sp),
+    // Подписи внизу: в Figma — Sans Serif Collection Regular 15.
+    chip = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 15.sp),
 )
 
 // ───────────────────────── Доступ к теме ─────────────────────────

@@ -146,9 +146,7 @@ fun SportButton(
 @Composable
 fun VolleyballIcon(modifier: Modifier = Modifier) {
     Image(
-        painter = painterResource("voleibollboll.png"),
         contentDescription = null,
-        contentScale = ContentScale.Crop,
         modifier = modifier.clip(CircleShape).border(3.dp, Color.White, CircleShape),
     )
 }
@@ -156,16 +154,7 @@ fun VolleyballIcon(modifier: Modifier = Modifier) {
 @Composable
 fun TennisBallIcon(modifier: Modifier = Modifier) {
     Canvas(modifier) {
-        val r = size.minDimension / 2f
-        val c = center
-        drawCircle(Color(0xFFB4D81B), r, c)
-        val ball = Path().apply { addOval(Rect(c, r)) }
-        clipPath(ball) {
-            val seam = Stroke(width = size.minDimension * 0.075f)
-            drawCircle(Color.White, radius = r * 0.92f, center = Offset(c.x - r * 1.05f, c.y), style = seam)
-            drawCircle(Color.White, radius = r * 0.92f, center = Offset(c.x + r * 1.05f, c.y), style = seam)
         }
-        drawCircle(Color.White, radius = r - 1.5.dp.toPx(), center = c, style = Stroke(3.dp.toPx()))
     }
 }
 

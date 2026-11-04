@@ -16,7 +16,6 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -238,14 +237,11 @@ fun rememberOvalsAnimation(
     LaunchedEffect(Unit) {
         val start = withFrameNanos { it }
         while (true) {
-            withFrameNanos { clock.longValue = it - start }
         }
     }
 
     val sprites = remember(specs, density.density) { specs.map { renderSprite(it, density) } }
     val diagonal = hypot(stage.windowWidth.value, stage.windowHeight.value)
-    return remember(sprites, speed, diagonal, period) {
-        OvalsAnimation(sprites, clock, speed, diagonal, period)
     }
 }
 
@@ -255,14 +251,12 @@ fun rememberOvalsAnimation(
  * Анимированное значение читается только на этапе отрисовки: рекомпозиций на каждый кадр нет.
  */
 @Composable
-fun OvalsCanvas(anim: OvalsAnimation, designTopLeft: Offset, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         val d = density
         val period = anim.period.toDouble()
         val travelled = anim.clock.longValue / 1e9 * anim.speed
         val phase = ((travelled % period) + period) % period
 
-        for (sp in anim.sprites) {
             // какие копии овала (сдвинутые на k·period) сейчас попадают в окно
             val span = anim.viewDiagonal / 2.0 + sp.halfLength
             val kMin = ceil((sp.mid - span - phase) / period).toInt()
@@ -271,7 +265,6 @@ fun OvalsCanvas(anim: OvalsAnimation, designTopLeft: Offset, modifier: Modifier 
                 val delta = phase + k * period
                 val x = sp.cx + sp.ux * delta - sp.width / 2.0 - designTopLeft.x
                 val y = sp.cy + sp.uy * delta - sp.height / 2.0 - designTopLeft.y
-                drawImage(sp.image, Offset((x * d).toFloat(), (y * d).toFloat()))
             }
         }
     }
@@ -280,11 +273,8 @@ fun OvalsCanvas(anim: OvalsAnimation, designTopLeft: Offset, modifier: Modifier 
 // ───────────────────────── Стеклянная карточка ─────────────────────────
 
 /**
- * «Матовое стекло»: внутри карточки рисуется та же анимация овалов, но размытая,
- * сверху полупрозрачная заливка и обводка из Figma. Размер и позицию задаёт [modifier].
  *
  * @param designTopLeft позиция левого верхнего угла карточки в координатах макета (dp).
- * @param blurRadius сила размытия. Больше значение: мягче цветовые пятна.
  */
 @Composable
 fun GlassCard(
@@ -292,7 +282,6 @@ fun GlassCard(
     designTopLeft: Offset,
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 39.dp,
-    blurRadius: Dp = 34.dp,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val colors = ScoreKeeperTheme.colors
@@ -316,9 +305,6 @@ fun GlassCard(
             }
         },
     ) {
-        Box(Modifier.matchParentSize().clip(shape).blur(blurRadius)) {
-            OvalsCanvas(anim, designTopLeft, Modifier.fillMaxSize())
-        }
         Box(
             Modifier
                 .matchParentSize()

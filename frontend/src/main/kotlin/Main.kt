@@ -100,16 +100,18 @@ fun main() = application {
     var showAudience by remember { mutableStateOf(false) }
     var tickerText by remember { mutableStateOf("") } // 👈 ТЕКСТ ДЛЯ ЗРИТЕЛЕЙ
 
-    val windowState = rememberWindowState(placement = WindowPlacement.Fullscreen)
+    // Оконный режим на весь экран (Maximized), а не эксклюзивный Fullscreen:
+    // не «слетает» при Alt+Tab и ведёт себя как обычное развёрнутое окно.
+    val windowState = rememberWindowState(placement = WindowPlacement.Maximized)
 
     Window(onCloseRequest = ::exitApplication, title = "ScoreKeeperApp", state = windowState) {
         Box(modifier = Modifier.fillMaxSize()) {
             when (currentScreen) {
                 Screen.menu -> MenuScreen(
-                    onTennis = { /* то, что было в btenis */ },
-                    onVolleyball = { /* то, что было в bvoleiball */ },
-                    onSettings = { /* то, что было в bsetting */ },
-                    onExit = { /* то, что было в bexit */ },
+                    onTennis = { selectedGame = Screen.tennis; showSetupDialog = true },
+                    onVolleyball = { selectedGame = Screen.valeball; showSetupDialog = true },
+                    onSettings = { },
+                    onExit = { exitProcess(0) },
                 )
 
                 Screen.tennis, Screen.valeball -> VoleyballScreen(
@@ -137,7 +139,7 @@ fun main() = application {
         Window(
             onCloseRequest = { showAudience = false },
             title = "ScoreKeeper - Табло",
-            state = rememberWindowState(placement = WindowPlacement.Fullscreen)
+            state = rememberWindowState(placement = WindowPlacement.Maximized)
         ) {
             AudienceScreen(
                 match = match,
@@ -150,17 +152,8 @@ fun main() = application {
 }
 
 // ============ ЭКРАН МЕНЮ ============
-// Главный экран полностью переписан по макету (Export.pdf) в отдельном файле
-// MainMenu.kt: анимированный фон из капсул, стеклянная карточка, анимации кнопок.
-@Composable
-fun МЕНЮ(btenis: () -> Unit, bvoleiball: () -> Unit, bsetting: () -> Unit, bexit: () -> Unit) {
-    MainMenuScreen(
-        onTennis = btenis,
-        onVolleyball = bvoleiball,
-        onSettings = bsetting,
-        onExit = bexit
-    )
-}
+// Главный экран — ui.screens.MenuScreen (вызывается прямо из main()):
+// анимированный фон из капсул, стеклянная карточка, анимации кнопок.
 
 // ============ АНИМАЦИЯ КНОПОК ============
 @Composable

@@ -1,5 +1,6 @@
 package ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,13 +10,13 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -110,33 +111,14 @@ fun MenuScreen(
 
 @Composable
 private fun LogoTile(modifier: Modifier = Modifier) {
-    val colors = ScoreKeeperTheme.colors
-    val type = ScoreKeeperTheme.typography
-    val px = LocalDensity.current.density   // тени текста задаются в пикселях, а не в dp
-
-    Box(
-        modifier
-            .size(250.dp)
-            .clip(RoundedCornerShape(55.dp))
-            .background(Brush.verticalGradient(listOf(colors.logoTop, colors.logoBottom))),
-    ) {
-        Box(Modifier.offset(10.dp, 71.dp).size(230.dp, 108.dp), contentAlignment = Alignment.Center) {
-            BasicText(
-                text = "30:45",
-                style = type.logoDigits.copy(
-                    color = colors.logoDigits,
-                    shadow = Shadow(
-                        color = colors.logoDigits.copy(alpha = 0.3f),
-                        offset = Offset(0f, 9f * px),
-                        blurRadius = 10f * px,
-                    ),
-                ),
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Visible,
-            )
-        }
-    }
+    // Логотип приложения — картинка из вашего SVG (resources/logo_app.png, 1000×1000):
+    // плитка с тёмно-синим градиентом, цифры «30:45» с белой обводкой и свечением.
+    Image(
+        painter = painterResource("logo_app.png"),
+        contentDescription = null,
+        contentScale = ContentScale.FillBounds,
+        modifier = modifier.size(250.dp),
+    )
 }
 
 @Composable
