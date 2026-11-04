@@ -43,7 +43,7 @@ class VolleyballEngine(AbstractMatchEngine):
         self.current_set = int(state["current_set"])
         self.current_server = int(state["server"])
         self.status = MatchStatus[state["status"]]
-        self.winner = state["winner"]
+        self.winner = state.get("winner")
         self.scoring_history.clear()
     
     def start_match(self, player1: str, player2: str, server_index: int) -> None:

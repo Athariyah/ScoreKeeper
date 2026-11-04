@@ -77,7 +77,7 @@ private data class TextRequest(val text: String)
 private data class TextResponse(val message: String)
 
 object ApiClient {
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true; explicitNulls = false }
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true; explicitNulls = true; encodeDefaults = true }
     private val client = HttpClient(io.ktor.client.engine.cio.CIO) {
         install(ContentNegotiation) { json(json) }
         install(WebSockets)
