@@ -102,7 +102,10 @@ internal fun FigmaText(
             text = AnnotatedString(text),
             style = style.copy(textAlign = textAlign),
             constraints = if (fixedWidth != null) {
-                Constraints(maxWidth = with(dens) { fixedWidth.roundToPx() })
+                // minWidth = maxWidth: параграф занимает всю заданную ширину,
+                // иначе он сжимается до ширины текста и TextAlign.Center не работает.
+                val wpx = with(dens) { fixedWidth.roundToPx() }
+                Constraints(minWidth = wpx, maxWidth = wpx)
             } else {
                 Constraints()
             },
