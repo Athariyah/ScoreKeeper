@@ -59,13 +59,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.*
 import com.example.ApiClient
 import com.example.ScoreResponse
+import com.example.TennisSetScore
 import com.example.VolleyballSetScore
 import kotlinx.coroutines.delay
 import org.jetbrains.skia.Image
 import ui.components.OvalsCanvas
 import ui.components.SettingsButton
 import ui.components.TennisBallIcon
-import ui.components.VolleyballIcon
 import ui.components.drawBlurredRoundRect
 import ui.components.rememberOvalsAnimation
 import ui.screens.BackArrowButton
@@ -76,6 +76,7 @@ import ui.screens.SettingsOverlay
 import ui.screens.TeamSetupOverlay
 import ui.theme.AppLanguage
 import ui.theme.AppStrings
+import ui.theme.ArialFamily
 import ui.theme.RuStrings
 import ui.theme.Brand
 import ui.theme.DesignStage
@@ -147,6 +148,7 @@ fun main() = application {
     var gameName2 by remember { mutableStateOf("") }
 
     var match by remember { mutableStateOf(MatchState()) }
+    var courtSide by remember { mutableStateOf("L") } // сторона поля подающей команды (общая для админки и табло)
     var showAudience by remember { mutableStateOf(false) }
     var tickerText by remember { mutableStateOf("") } // 👈 ТЕКСТ ДЛЯ ЗРИТЕЛЕЙ
 
@@ -185,7 +187,9 @@ fun main() = application {
                     tickerText = tickerText, onTickerUpdate = { tickerText = it }, // 👈 ПЕРЕДАЕМ ТЕКСТ
                     darkTheme = darkTheme,
                     language = language,
-                    onSettings = { showSettings = true }
+                    onSettings = { showSettings = true },
+                    courtSide = courtSide,
+                    onCourtSideChange = { courtSide = it }
                 )
             }
 
@@ -253,6 +257,7 @@ fun main() = application {
                                 logo2 = gameLogo2,
                                 modifier = Modifier.offset(223.dp, 223.dp),
                                 tickerText = tickerText,
+                                courtSide = courtSide,
                                 strings = stringsFor(language),
                             ) // 👈 ПЕРЕДАЕМ ТЕКСТ
                         }
@@ -682,7 +687,7 @@ private fun GreenActionButton(
 
 // ───────────────────────── Элементы диалогов ─────────────────────────
 
-/** Монета подачи: оригинал жетона (coin.png) — выбранная команда, серая с кольцом #9EC8E2 — нет. */
+/** Монета подачи: золотой жетон «СК» с кольцом — выбранная команда, серый жетон — нет (ассеты из макета). */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun ServeCoin(
@@ -690,7 +695,6 @@ private fun ServeCoin(
     size: Dp,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    coinFraction: Float = 1f,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val scale = rememberPressScale(interaction)
@@ -701,19 +705,11 @@ private fun ServeCoin(
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        if (selected) {
-            Image(
-                painter = painterResource("coin.png"),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(coinFraction),
-            )
-        } else {
-            Box(
-                Modifier.fillMaxSize().clip(CircleShape)
-                    .background(CoinGray)
-                    .border(5.dp, CoinRing, CircleShape),
-            )
-        }
+        Image(
+            painter = painterResource(if (selected) "coin_gold.png" else "coin_gray.png"),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 }
 
@@ -905,8 +901,8 @@ private fun TossDialogOverlay(
             )
         }
         Box(Modifier.offset(395.dp, 130.dp).size(4.dp, 310.dp).background(colors.divider, RoundedCornerShape(2.dp)))
-        ServeCoin(serverSel == 0, 120.dp, onClick = { serverSel = 0 }, modifier = Modifier.offset(144.dp, 267.dp), coinFraction = 0.9f)
-        ServeCoin(serverSel == 1, 120.dp, onClick = { serverSel = 1 }, modifier = Modifier.offset(522.dp, 267.dp), coinFraction = 0.9f)
+        ServeCoin(serverSel == 0, 125.dp, onClick = { serverSel = 0 }, modifier = Modifier.offset(141.5.dp, 264.5.dp))
+        ServeCoin(serverSel == 1, 125.dp, onClick = { serverSel = 1 }, modifier = Modifier.offset(519.5.dp, 264.5.dp))
         GreenActionButton(
             strings.confirm, 324.dp,
             onClick = { onConfirm(serverSel) },
@@ -1000,7 +996,7 @@ private fun CorrectionDialogOverlay(
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
-        ServeCoin(serverSel == 0, 46.dp, onClick = { serverSel = 0 }, modifier = Modifier.offset(288.dp, 73.dp))
+        ServeCoin(serverSel == 0, 51.dp, onClick = { serverSel = 0 }, modifier = Modifier.offset(285.5.dp, 70.5.dp))
         Box(
             Modifier.offset(447.dp, 79.dp).size(205.dp, 42.dp),
             contentAlignment = Alignment.CenterStart,
@@ -1010,7 +1006,7 @@ private fun CorrectionDialogOverlay(
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
-        ServeCoin(serverSel == 1, 46.dp, onClick = { serverSel = 1 }, modifier = Modifier.offset(665.dp, 73.dp))
+        ServeCoin(serverSel == 1, 51.dp, onClick = { serverSel = 1 }, modifier = Modifier.offset(662.5.dp, 70.5.dp))
 
         Box(Modifier.offset(391.dp, 79.dp).size(4.dp, 310.dp).background(colors.divider, RoundedCornerShape(2.dp)))
 
@@ -1077,14 +1073,15 @@ fun VoleyballScreen(
     onTickerUpdate: (String) -> Unit,
     darkTheme: Boolean,
     language: AppLanguage,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    courtSide: String,
+    onCourtSideChange: (String) -> Unit
 ) {
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var secondsElapsed by remember { mutableStateOf(0) }
     var showTossDialog by remember { mutableStateOf(false) }
     var showTextDialog by remember { mutableStateOf(false) }
     var showCorrectionDialog by remember { mutableStateOf(false) }
-    var courtSide by remember { mutableStateOf("L") } // Сторона L/R
 
     LaunchedEffect(errorMsg) {
         if (errorMsg != null) {
@@ -1173,42 +1170,11 @@ fun VoleyballScreen(
                             tickerText = tickerText,
                             courtSide = courtSide,
                             strings = strings,
+                            preview = true,
+                            onDisplayText = { showTextDialog = true },
                         )
                     }
 
-                    Row(
-                        Modifier.offset(18.dp, 18.dp).height(52.dp)
-                            .clip(RoundedCornerShape(26.dp))
-                            .background(Color(0xFF1B2A44).copy(alpha = 0.85f))
-                            .padding(horizontal = 22.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Box(Modifier.size(12.dp).clip(CircleShape).background(Color(0xFFFF3B30)))
-                        BasicText(
-                            strings.preview,
-                            style = type.caption.copy(color = Color.White),
-                            maxLines = 1, softWrap = false,
-                        )
-                    }
-
-                    Row(
-                        Modifier.align(Alignment.TopEnd).offset(x = (-18).dp, y = 18.dp).height(52.dp)
-                            .clip(RoundedCornerShape(26.dp))
-                            .background(Color(0xFF1B2A44).copy(alpha = 0.85f))
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) { showTextDialog = true }
-                            .padding(horizontal = 22.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        BasicText(
-                            strings.displayTextBtn,
-                            style = type.caption.copy(color = Color.White),
-                            maxLines = 1, softWrap = false,
-                        )
-                    }
                 }
 
                 // ── Нижняя левая карточка: партии ──
@@ -1259,7 +1225,11 @@ fun VoleyballScreen(
                 if (isTennis) {
                     TennisBallIcon(Modifier.offset(1273.dp, 156.dp).size(112.dp))
                 } else {
-                    VolleyballIcon(Modifier.offset(1273.dp, 156.dp).size(112.dp))
+                    Image(
+                        painter = painterResource("volleyball_icon.png"),
+                        contentDescription = null,
+                        modifier = Modifier.offset(1276.dp, 159.dp).size(106.dp),
+                    )
                 }
                 BasicText(
                     if (isTennis) strings.tennis else strings.volleyball,
@@ -1354,8 +1324,34 @@ fun VoleyballScreen(
                     OutlineActionButton(
                         text = strings.reset,
                         onClick = {
-                            secondsElapsed = 0
-                            ApiClient.reset(apply) { errorMsg = it }
+                            // Только счёт в ноль — команды, статус матча, подающий и таймер сохраняются.
+                            if (isTennis) {
+                                ApiClient.setScore(
+                                    TennisSetScore(
+                                        points = listOf(0, 0),
+                                        games = listOf(0, 0),
+                                        setsWon = listOf(0, 0),
+                                        server = match.server,
+                                        status = match.status,
+                                        winner = null,
+                                    ),
+                                    onResult = apply,
+                                    onError = { errorMsg = it },
+                                )
+                            } else {
+                                ApiClient.setScore(
+                                    VolleyballSetScore(
+                                        sets = listOf(0, 0),
+                                        setsWon = listOf(0, 0),
+                                        currentSet = 1,
+                                        server = match.server,
+                                        status = match.status,
+                                        winner = null,
+                                    ),
+                                    onResult = apply,
+                                    onError = { errorMsg = it },
+                                )
+                            }
                         },
                         modifier = Modifier.offset(1322.dp, 685.dp).size(223.dp, 93.dp),
                     ) { ResetIcon(colors.headingBlue) }
@@ -1441,7 +1437,7 @@ fun VoleyballScreen(
                     name2 = displayName2,
                     courtSide = courtSide,
                     usePathText = language == AppLanguage.RU,
-                    onCourtSideChange = { courtSide = it },
+                    onCourtSideChange = onCourtSideChange,
                     onBack = { showCorrectionDialog = false },
                     onSubmit = { s1, s2, sets1, sets2, server ->
                         ApiClient.setScore(
@@ -1466,8 +1462,10 @@ fun VoleyballScreen(
 // ============ ТАБЛО ДЛЯ ЗРИТЕЛЕЙ («Экран предпросмотра» из Figma SVG) ============
 // Пространство дизайна 1129×698: рамка табло 1115×684 r40 в точке (7,7),
 // обводка 14 (градиент #CFE6F5→#81B6D6). Все координаты — из присланного SVG.
+// Шрифт табло — Arial. В режиме preview (предпросмотр в админке) поверх рамки —
+// пилюли «ПРЕДПРОСМОТР» и «ВЫВЕСТИ ТЕКСТ» из того же SVG.
 
-/** Белый текст табло, центрированный в точке (centerX, centerY) пространства дизайна. */
+/** Текст табло (Arial), центрированный в точке (centerX, centerY) пространства дизайна. */
 @Composable
 private fun BoardText(
     text: String,
@@ -1486,6 +1484,7 @@ private fun BoardText(
         Text(
             text,
             color = color,
+            fontFamily = ArialFamily,
             fontSize = fontSize,
             fontWeight = fontWeight,
             lineHeight = fontSize,
@@ -1505,14 +1504,33 @@ fun AudienceScreen(
     modifier: Modifier = Modifier,
     tickerText: String = "",
     courtSide: String = "L",
-    strings: AppStrings = RuStrings
+    strings: AppStrings = RuStrings,
+    preview: Boolean = false,
+    onDisplayText: () -> Unit = {}
 ) {
     var live by remember { mutableStateOf(match) }
 
     LaunchedEffect(match) { live = match }
 
+    // Сообщение на табло: показываем ~7 секунд после появления, затем прячем.
+    var shownText by remember { mutableStateOf(tickerText) }
+    var textNonce by remember { mutableStateOf(0) }
+    LaunchedEffect(tickerText) {
+        shownText = tickerText
+        textNonce++
+    }
+    LaunchedEffect(textNonce) {
+        if (shownText.isNotBlank()) {
+            delay(7_000)
+            shownText = ""
+        }
+    }
+
     DisposableEffect(Unit) {
-        ApiClient.connectScoreWs(onScore = { r -> live = MatchState.fromResponse(r) }, onText = { })
+        ApiClient.connectScoreWs(
+            onScore = { r -> live = MatchState.fromResponse(r) },
+            onText = { t -> shownText = t; textNonce++ },
+        )
         onDispose { ApiClient.disconnectWs() }
     }
 
@@ -1528,21 +1546,23 @@ fun AudienceScreen(
                 }
                 drawPath(frame, Color(0xFF070F2B))
                 clipPath(frame) {
-                    // тёмно-синяя диагональная полоса
+                    // тёмно-синяя диагональная полоса (в SVG — с прозрачностью 0.6)
                     val navy = Path().apply {
                         moveTo(7f, 691f); lineTo(743.3f, 7f); lineTo(1122f, 7f); lineTo(1122f, 212.2f); close()
                     }
                     drawPath(
                         navy,
                         Brush.verticalGradient(listOf(Color(0xFF2A5298), Color(0xFF1E3C72)), startY = 7f, endY = 691f),
+                        alpha = 0.6f,
                     )
-                    // красная диагональ
+                    // красная диагональ (в SVG — с прозрачностью 0.9)
                     val red = Path().apply {
                         moveTo(7f, 691f); lineTo(1122f, 100f); lineTo(1122f, 691f); close()
                     }
                     drawPath(
                         red,
                         Brush.horizontalGradient(listOf(Color(0xFFBA0C24), Color(0xFFF21B3F)), startX = 7f, endX = 1122f),
+                        alpha = 0.9f,
                     )
                     // матовые панели команд (белый 10%, контур #BABABA 2)
                     withTransform({ translate(-222.7f, -222.7f) }) {
@@ -1561,15 +1581,19 @@ fun AudienceScreen(
                     // точки-двоеточие между партиями
                     drawCircle(Color.White, 15f, Offset(565f, 285f))
                     drawCircle(Color.White, 15f, Offset(565f, 350f))
-                    // бейдж L/R: кольцо #848484, левая половина #C31332, правая #18305F
+                    // бейдж L/R: кольцо #848484; L — на красном (#C31332), R — на тёмно-синем (#18305F);
+                    // при смене стороны в корректировке буквы (с цветами) меняются местами.
                     val bc = Offset(564f, 462f)
+                    val swapped = courtSide == "R"
                     drawCircle(Color(0xFF848484), 37f, bc)
                     drawArc(
-                        Color(0xFFC31332), startAngle = 90f, sweepAngle = 180f, useCenter = true,
+                        if (swapped) Color(0xFF18305F) else Color(0xFFC31332),
+                        startAngle = 90f, sweepAngle = 180f, useCenter = true,
                         topLeft = Offset(bc.x - 32.3f, bc.y - 32.3f), size = Size(64.6f, 64.6f),
                     )
                     drawArc(
-                        Color(0xFF18305F), startAngle = -90f, sweepAngle = 180f, useCenter = true,
+                        if (swapped) Color(0xFFC31332) else Color(0xFF18305F),
+                        startAngle = -90f, sweepAngle = 180f, useCenter = true,
                         topLeft = Offset(bc.x - 32.3f, bc.y - 32.3f), size = Size(64.6f, 64.6f),
                     )
                     drawLine(Color.White, Offset(564f, 436f), Offset(564f, 486f), strokeWidth = 2f)
@@ -1624,23 +1648,58 @@ fun AudienceScreen(
         }
 
         // Левая колонка
-        BoardText(live.team1.uppercase(), 328f, 301f, 36.sp, FontWeight.Medium)
-        BoardText("${live.sets1}", 328f, 370f, 62.sp, FontWeight.Bold)
-        BoardText(strings.setsLabel, 328f, 419f, 24.sp, FontWeight.Medium)
-        BoardText("${live.score1}", 328f, 506f, 118.sp, FontWeight.Black)
-        BoardText(strings.pointsTab, 328f, 591f, 33.sp, FontWeight.Medium)
+        BoardText(live.team1.uppercase(), 328f, 301f, 38.sp, FontWeight.Normal)
+        BoardText("${live.sets1}", 328f, 370f, 64.sp, FontWeight.Bold)
+        BoardText(strings.setsLabel, 328f, 419f, 24.sp, FontWeight.Normal)
+        BoardText("${live.score1}", 328f, 506f, 124.sp, FontWeight.Bold)
+        BoardText(strings.pointsTab, 328f, 591f, 33.sp, FontWeight.Normal)
 
         // Правая колонка
-        BoardText(live.team2.uppercase(), 802f, 301f, 36.sp, FontWeight.Medium)
-        BoardText("${live.sets2}", 802f, 370f, 62.sp, FontWeight.Bold)
-        BoardText(strings.setsLabel, 802f, 419f, 24.sp, FontWeight.Medium)
-        BoardText("${live.score2}", 802f, 506f, 118.sp, FontWeight.Black)
-        BoardText(strings.pointsTab, 802f, 591f, 33.sp, FontWeight.Medium)
+        BoardText(live.team2.uppercase(), 802f, 301f, 38.sp, FontWeight.Normal)
+        BoardText("${live.sets2}", 802f, 370f, 64.sp, FontWeight.Bold)
+        BoardText(strings.setsLabel, 802f, 419f, 24.sp, FontWeight.Normal)
+        BoardText("${live.score2}", 802f, 506f, 124.sp, FontWeight.Bold)
+        BoardText(strings.pointsTab, 802f, 591f, 33.sp, FontWeight.Normal)
 
-        // Центр: «ПАРТИЯ N» и буквы бейджа
-        BoardText("${strings.setTab} ${live.currentSet}", 564f, 600f, 33.sp, FontWeight.Medium, width = 211f)
-        BoardText("L", 549.5f, 462f, 32.sp, FontWeight.Bold, width = 34f)
-        BoardText("R", 579.5f, 462f, 32.sp, FontWeight.Bold, width = 34f)
+        // Центр: «ПАРТИЯ N» и буквы бейджа (меняются местами со стороной подачи)
+        BoardText("${strings.setTab} ${live.currentSet}", 564f, 600f, 35.sp, FontWeight.Normal, width = 211f)
+        BoardText(if (courtSide == "R") "R" else "L", 549.5f, 462f, 35.sp, FontWeight.Bold, width = 34f)
+        BoardText(if (courtSide == "R") "L" else "R", 579.5f, 462f, 35.sp, FontWeight.Bold, width = 34f)
+
+        // Пилюли предпросмотра (только в панели админки, по SVG «Экран предпросмотра»)
+        if (preview) {
+            Box(
+                Modifier.offset(42.dp, 37.dp).size(230.dp, 53.dp)
+                    .clip(RoundedCornerShape(26.5.dp)).background(Color(0xFF032351)),
+            )
+            Box(
+                Modifier.offset(54.dp, 56.dp).size(15.dp)
+                    .clip(CircleShape).background(Color(0xFFFA4243)),
+            )
+            BoardText(strings.preview, 169.3f, 64.9f, 21.sp, FontWeight.Bold, width = 190f)
+
+            val chipInteraction = remember { MutableInteractionSource() }
+            val chipScale = rememberPressScale(chipInteraction)
+            Box(
+                Modifier.offset(857.dp, 37.dp).size(230.dp, 53.dp)
+                    .graphicsLayer { scaleX = chipScale; scaleY = chipScale }
+                    .clip(RoundedCornerShape(26.5.dp)).background(Color(0xFF032351))
+                    .hoverable(chipInteraction).pointerHoverIcon(PointerIcon.Hand)
+                    .clickable(interactionSource = chipInteraction, indication = null) { onDisplayText() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    strings.displayTextBtn,
+                    color = Color.White,
+                    fontFamily = ArialFamily,
+                    fontSize = 21.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 21.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+        }
 
         // Баннер победителя поверх затемнённого табло / пилюля сообщения сверху
         val winnerName = when (live.winner) {
@@ -1663,6 +1722,7 @@ fun AudienceScreen(
                     Text(
                         strings.winnerLabel,
                         color = Color(0xFFFFBF00),
+                        fontFamily = ArialFamily,
                         fontSize = 64.sp,
                         fontWeight = FontWeight.Bold,
                         lineHeight = 64.sp,
@@ -1674,8 +1734,9 @@ fun AudienceScreen(
                     Text(
                         winnerName.uppercase(),
                         color = Color.White,
+                        fontFamily = ArialFamily,
                         fontSize = 42.sp,
-                        fontWeight = FontWeight.Medium,
+                        fontWeight = FontWeight.Normal,
                         lineHeight = 42.sp,
                         maxLines = 1,
                         softWrap = false,
@@ -1684,24 +1745,27 @@ fun AudienceScreen(
                     )
                 }
             }
-        } else if (tickerText.isNotBlank()) {
+        } else if (shownText.isNotBlank()) {
+            // Пилюля масштабируется под длину текста.
             Box(
-                Modifier.offset(311.dp, 96.dp).size(533.dp, 124.dp)
+                Modifier.align(Alignment.TopCenter).offset(y = 96.dp)
+                    .height(124.dp).widthIn(min = 460.dp, max = 1020.dp)
                     .clip(RoundedCornerShape(42.dp))
-                    .background(Color(0xFF162C5A)),
+                    .background(Color(0xFF162C5A))
+                    .padding(horizontal = 80.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    tickerText,
+                    shownText,
                     color = Color.White,
+                    fontFamily = ArialFamily,
                     fontSize = 50.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.Normal,
                     lineHeight = 50.sp,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 36.dp),
                 )
             }
         }

@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.platform.Font
@@ -170,6 +171,11 @@ private val ClearSans: FontFamily =
 private val AqumTwo: FontFamily =
     if (aqumLoaded) FontFamily(Font("fonts/AqumTwo-Classic.ttf", FontWeight.Normal))
     else FontFamily.SansSerif
+
+/** Системный Arial — шрифт табло для зрителей (экран предпросмотра). Если Arial
+ *  в системе нет, Compose подставит ближайший системный sans-serif. */
+@OptIn(ExperimentalTextApi::class)
+val ArialFamily: FontFamily = FontFamily("Arial")
 
 @Immutable
 class ScoreKeeperTypography(
