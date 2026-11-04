@@ -16,6 +16,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.platform.Font
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -53,9 +54,20 @@ class ScoreKeeperColors(
     val logoDigits: Color,
     val chipBg: Color,
     val chipText: Color,
+    // Белые карточки-оверлеи (настройки, настройка команд/игроков)
+    val cardSurface: Color,
+    val cardBorder: Color,
+    val headingBlue: Color,
+    val divider: Color,
+    val fieldBg: Color,
+    val fieldText: Color,
+    val fieldPlaceholder: Color,
+    val captionText: Color,
+    val doneButtonBg: Color,
+    val onDoneButton: Color,
 )
 
-/** Светлая тема. Тёмную добавим отдельным объектом ScoreKeeperColors(...) по тёмным макетам. */
+/** Светлая тема (по умолчанию). Тёмная — DarkColors ниже. */
 val LightColors = ScoreKeeperColors(
     canvas = Color.White,
     glassFill = Color(0x73FFF8D1),          // rgba(255,248,209,0.45) — стекло менее прозрачное
@@ -75,6 +87,48 @@ val LightColors = ScoreKeeperColors(
     logoDigits = Color(0xFFDCB422),
     chipBg = Color.White,
     chipText = Color.Black,
+    cardSurface = Color.White,
+    cardBorder = Color(0xFFE2EEF7),
+    headingBlue = Color(0xFF2070F5),
+    divider = Color(0xFFE4F0F8),
+    fieldBg = Color(0xFF465A72),
+    fieldText = Color.White,
+    fieldPlaceholder = Color(0xFFC7D3E0),
+    captionText = Color.Black,
+    doneButtonBg = Color(0xFF69DB7C),
+    onDoneButton = Color.Black,
+)
+
+/** Тёмная тема: тот же фирменный синий и яркие овалы, но на тёмно-синем фоне. */
+val DarkColors = ScoreKeeperColors(
+    canvas = Color(0xFF0B1220),
+    glassFill = Color(0x73141E33),          // тёмно-синее «стекло», 45%
+    glassBorder = Color(0x334A6CA8),
+    buttonStart = Color(0xFF1D6FF7),
+    buttonEnd = Color(0xFF6B8EC7),
+    buttonGlow = Color(0xFF2171F4),
+    onButton = Color.White,
+    iconButtonBg = Color(0xFF1D2A42),
+    iconButtonBgHover = Color(0xFF27395C),
+    iconButtonFg = Color(0xFFDCE6FF),
+    titleTop = Color(0xFFF2F6FF),
+    titleBottom = Color(0xFF7C9BFF),
+    titleGlow = Color(0xFF2171F4),
+    logoTop = Color(0xFF03020A),
+    logoBottom = Color(0xFF0F0F7F),
+    logoDigits = Color(0xFFDCB422),
+    chipBg = Color(0xFF1D2A42),
+    chipText = Color(0xFFE8EEF9),
+    cardSurface = Color(0xFF141F31),
+    cardBorder = Color(0xFF22314A),
+    headingBlue = Color(0xFF6FA8FF),
+    divider = Color(0xFF22314A),
+    fieldBg = Color(0xFF2A3B57),
+    fieldText = Color.White,
+    fieldPlaceholder = Color(0xFF8FA3C0),
+    captionText = Color(0xFFB9C6D8),
+    doneButtonBg = Color(0xFF69DB7C),
+    onDoneButton = Color.Black,
 )
 
 // ───────────────────────── Шрифты и типографика ─────────────────────────
@@ -101,6 +155,12 @@ class ScoreKeeperTypography(
     val logoDigits: TextStyle,  // «30:45» в логотипе
     val button: TextStyle,      // подписи кнопок
     val chip: TextStyle,        // мелкие плашки внизу
+    val heading: TextStyle,     // «НАСТРОЙКИ», «ТЕМА ПРИЛОЖЕНИЯ»…
+    val cardTitle: TextStyle,   // двустрочный заголовок настройки команд
+    val teamLabel: TextStyle,   // «КОМАНДА 1» / «ИГРОК 1»
+    val caption: TextStyle,     // «РАЗРАБОТАНО ДЛЯ СПОРТИВНОЙ КОМИССИИ»
+    val doneButton: TextStyle,  // «ГОТОВО»
+    val field: TextStyle,       // текст в полях ввода
 )
 
 val DefaultTypography = ScoreKeeperTypography(
@@ -113,29 +173,102 @@ val DefaultTypography = ScoreKeeperTypography(
     ),
     // Подписи внизу: в Figma — Sans Serif Collection Regular 15.
     chip = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 15.sp),
+    heading = TextStyle(fontFamily = ClearSans, fontWeight = FontWeight.Bold, fontSize = 40.sp),
+    cardTitle = TextStyle(
+        fontFamily = ClearSans, fontWeight = FontWeight.Bold,
+        fontSize = 28.sp, lineHeight = 34.sp, textAlign = TextAlign.Center,
+    ),
+    teamLabel = TextStyle(fontFamily = ClearSans, fontWeight = FontWeight.Bold, fontSize = 32.sp),
+    caption = TextStyle(fontFamily = ClearSans, fontWeight = FontWeight.Bold, fontSize = 19.sp),
+    doneButton = TextStyle(fontFamily = ClearSans, fontWeight = FontWeight.Bold, fontSize = 34.sp),
+    field = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 20.sp),
 )
+
+// ───────────────────────── Язык интерфейса ─────────────────────────
+
+enum class AppLanguage { RU, EN }
+
+@Immutable
+class AppStrings(
+    val volleyball: String,
+    val tennis: String,
+    val settingsTitle: String,
+    val appTheme: String,
+    val appLanguage: String,
+    val developedFor: String,
+    val setupTeamsTitle: String,
+    val setupPlayersTitle: String,
+    val team1: String,
+    val team2: String,
+    val player1: String,
+    val player2: String,
+    val done: String,
+)
+
+val RuStrings = AppStrings(
+    volleyball = "ВОЛЕЙБОЛ",
+    tennis = "ТЕННИС",
+    settingsTitle = "НАСТРОЙКИ",
+    appTheme = "ТЕМА ПРИЛОЖЕНИЯ",
+    appLanguage = "ЯЗЫК ПРИЛОЖЕНИЯ",
+    developedFor = "РАЗРАБОТАНО ДЛЯ СПОРТИВНОЙ КОМИССИИ",
+    setupTeamsTitle = "ВВЕДИТЕ НАЗВАНИЕ КОМАНД\nИ ЗАГРУЗИТЕ ИХ ЛОГО.",
+    setupPlayersTitle = "ВВЕДИТЕ ИМЕНА ИГРОКОВ И\nЗАГРУЗИТЕ ИХ ЛОГО.",
+    team1 = "КОМАНДА 1",
+    team2 = "КОМАНДА 2",
+    player1 = "ИГРОК 1",
+    player2 = "ИГРОК 2",
+    done = "ГОТОВО",
+)
+
+val EnStrings = AppStrings(
+    volleyball = "VOLLEYBALL",
+    tennis = "TENNIS",
+    settingsTitle = "SETTINGS",
+    appTheme = "APP THEME",
+    appLanguage = "APP LANGUAGE",
+    developedFor = "DEVELOPED FOR THE SPORTS COMMISSION",
+    setupTeamsTitle = "ENTER TEAM NAMES\nAND UPLOAD THEIR LOGOS.",
+    setupPlayersTitle = "ENTER PLAYER NAMES\nAND UPLOAD THEIR LOGOS.",
+    team1 = "TEAM 1",
+    team2 = "TEAM 2",
+    player1 = "PLAYER 1",
+    player2 = "PLAYER 2",
+    done = "DONE",
+)
+
+fun stringsFor(language: AppLanguage): AppStrings =
+    if (language == AppLanguage.RU) RuStrings else EnStrings
+
+fun colorsFor(darkTheme: Boolean): ScoreKeeperColors =
+    if (darkTheme) DarkColors else LightColors
 
 // ───────────────────────── Доступ к теме ─────────────────────────
 
 private val LocalColors = staticCompositionLocalOf { LightColors }
 private val LocalTypography = staticCompositionLocalOf { DefaultTypography }
+private val LocalStrings = staticCompositionLocalOf { RuStrings }
 
 object ScoreKeeperTheme {
     val colors: ScoreKeeperColors
         @Composable @ReadOnlyComposable get() = LocalColors.current
     val typography: ScoreKeeperTypography
         @Composable @ReadOnlyComposable get() = LocalTypography.current
+    val strings: AppStrings
+        @Composable @ReadOnlyComposable get() = LocalStrings.current
 }
 
 @Composable
 fun ScoreKeeperTheme(
     colors: ScoreKeeperColors = LightColors,
     typography: ScoreKeeperTypography = DefaultTypography,
+    strings: AppStrings = RuStrings,
     content: @Composable () -> Unit,
 ) {
     CompositionLocalProvider(
         LocalColors provides colors,
         LocalTypography provides typography,
+        LocalStrings provides strings,
         content = content,
     )
 }

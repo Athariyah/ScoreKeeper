@@ -1,5 +1,8 @@
 import androidx.compose.animation.core.Spring
 import ui.screens.MenuScreen
+import ui.screens.SettingsOverlay
+import ui.screens.TeamSetupOverlay
+import ui.theme.AppLanguage
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
@@ -100,18 +103,30 @@ fun main() = application {
     var showAudience by remember { mutableStateOf(false) }
     var tickerText by remember { mutableStateOf("") } // 👈 ТЕКСТ ДЛЯ ЗРИТЕЛЕЙ
 
-    // Оконный режим на весь экран (Maximized), а не эксклюзивный Fullscreen:
-    // не «слетает» при Alt+Tab и ведёт себя как обычное развёрнутое окно.
+    // Настройки приложения (экран «Настройки»): тема и язык.
+    var darkTheme by remember { mutableStateOf(false) }
+    var language by remember { mutableStateOf(AppLanguage.RU) }
+    var showSettings by remember { mutableStateOf(false) }
+
+    // Безрамочное окно на весь экран: Maximized + undecorated — верхней системной
+    // панельки не видно, но это обычное окно (не эксклюзивный Fullscreen), поэтому
+    // Alt+Tab работает мгновенно, а свернуть можно кнопкой «–» в меню или с панели задач.
     val windowState = rememberWindowState(placement = WindowPlacement.Maximized)
 
-    Window(onCloseRequest = ::exitApplication, title = "ScoreKeeperApp", state = windowState) {
+    Window(
+        onCloseRequest = ::exitApplication, title = "ScoreKeeperApp",
+        state = windowState, undecorated = true,
+    ) {
         Box(modifier = Modifier.fillMaxSize()) {
             when (currentScreen) {
                 Screen.menu -> MenuScreen(
                     onTennis = { selectedGame = Screen.tennis; showSetupDialog = true },
                     onVolleyball = { selectedGame = Screen.valeball; showSetupDialog = true },
-                    onSettings = { },
+                    onSettings = { showSettings = true },
                     onExit = { exitProcess(0) },
+                    onMinimize = { windowState.isMinimized = true },
+                    darkTheme = darkTheme,
+                    language = language,
                 )
 
                 Screen.tennis, Screen.valeball -> VoleyballScreen(
@@ -122,16 +137,35 @@ fun main() = application {
                     tickerText = tickerText, onTickerUpdate = { tickerText = it } // 👈 ПЕРЕДАЕМ ТЕКСТ
                 )
             }
-        }
 
-        if (showSetupDialog) {
-            setteam_window(
-                exit_setwind = { showSetupDialog = false },
-                startgame_inready = { logo1, name1, logo2, name2 ->
-                    gameLogo1 = logo1; gameName1 = name1; gameLogo2 = logo2; gameName2 = name2
-                    showSetupDialog = false; currentScreen = selectedGame
-                }
-            )
+            // Оверлеи поверх экрана: настройка команд/игроков и настройки приложения.
+            if (showSetupDialog) {
+                TeamSetupOverlay(
+                    forTennis = selectedGame == Screen.tennis,
+                    darkTheme = darkTheme,
+                    language = language,
+                    onPickImage = {
+                        loadImageFromFile(
+                            if (language == AppLanguage.RU) "Выберите логотип" else "Choose a logo"
+                        )
+                    },
+                    onBack = { showSetupDialog = false },
+                    onDone = { logo1, name1, logo2, name2 ->
+                        gameLogo1 = logo1; gameName1 = name1; gameLogo2 = logo2; gameName2 = name2
+                        showSetupDialog = false; currentScreen = selectedGame
+                    },
+                )
+            }
+
+            if (showSettings) {
+                SettingsOverlay(
+                    darkTheme = darkTheme,
+                    onToggleTheme = { darkTheme = !darkTheme },
+                    language = language,
+                    onLanguageChange = { language = it },
+                    onBack = { showSettings = false },
+                )
+            }
         }
     }
 
@@ -139,7 +173,8 @@ fun main() = application {
         Window(
             onCloseRequest = { showAudience = false },
             title = "ScoreKeeper - Табло",
-            state = rememberWindowState(placement = WindowPlacement.Maximized)
+            state = rememberWindowState(placement = WindowPlacement.Maximized),
+            undecorated = true,
         ) {
             AudienceScreen(
                 match = match,
@@ -178,8 +213,8 @@ fun AnimatedClickableImage(painter: Painter, onClick: () -> Unit) {
 }
 
 // ============ УТИЛИТА ДЛЯ ЗАГРУЗКИ КАРТИНКИ ============
-fun loadImageFromFile(): ImageBitmap? {
-    val dialog = java.awt.FileDialog(null as java.awt.Frame?, "Выберите логотип", java.awt.FileDialog.LOAD)
+fun loadImageFromFile(title: String = "Выберите логотип"): ImageBitmap? {
+    val dialog = java.awt.FileDialog(null as java.awt.Frame?, title, java.awt.FileDialog.LOAD)
     dialog.setFilenameFilter { _, name ->
         name.endsWith(".png", ignoreCase = true) || name.endsWith(".jpg", ignoreCase = true) || name.endsWith(
             ".jpeg",
@@ -204,131 +239,9 @@ fun loadImageFromFile(): ImageBitmap? {
 }
 
 // ============ ОКНО НАСТРОЙКИ КОМАНД ============
-@Composable
-fun setteam_window(
-    exit_setwind: () -> Unit, startgame_inready: (ImageBitmap?, String, ImageBitmap?, String) -> Unit
-) {
-    var logo1 by remember { mutableStateOf<ImageBitmap?>(null) }
-    var logo2 by remember { mutableStateOf<ImageBitmap?>(null) }
-    var name1 by remember { mutableStateOf("") }
-    var name2 by remember { mutableStateOf("") }
+// Теперь это оверлей поверх меню: ui.screens.TeamSetupOverlay (Overlays.kt),
+// для тенниса — «ИГРОК 1/2», для волейбола — «КОМАНДА 1/2».
 
-    Dialog(onDismissRequest = exit_setwind) {
-        Surface(
-            shape = RoundedCornerShape(24.dp), color = Color.White, modifier = Modifier.width(500.dp).height(500.dp)
-        ) {
-            Box(modifier = Modifier.padding(all = 24.dp)) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "ВВЕДИТЕ ИМЕНА ИГРОКОВ \n И ЗАГРУЗИТЕ ИХ ЛОГО.",
-                        color = Color(32, 112, 245),
-                        fontSize = 25.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 28.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        TeamColumn(
-                            title = "Игрок 1",
-                            image = logo1,
-                            onImageClick = { logo1 = loadImageFromFile() },
-                            name = name1,
-                            onNameChange = { name1 = it })
-
-                        Box(
-                            modifier = Modifier.width(1.dp).height(280.dp).background(Color(0xFFE0E0E0))
-                                .align(Alignment.CenterVertically)
-                        )
-
-                        TeamColumn(
-                            title = "Игрок 2",
-                            image = logo2,
-                            onImageClick = { logo2 = loadImageFromFile() },
-                            name = name2,
-                            onNameChange = { name2 = it })
-                    }
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    Button(
-                        onClick = { startgame_inready(logo1, name1, logo2, name2) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF81C784)),
-                        shape = RoundedCornerShape(50),
-                        modifier = Modifier.width(200.dp).height(50.dp)
-                    ) {
-                        Text("ГОТОВО", fontSize = 20.sp, color = Color.Black, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                IconButton(
-                    onClick = exit_setwind, modifier = Modifier.align(Alignment.TopEnd).offset(x = 16.dp, y = (-16).dp)
-                ) {
-                    Text("←", fontSize = 32.sp, color = Color(0xFF1976D2))
-                }
-            }
-        }
-    }
-}
-
-// ============ КОЛОНКА КОМАНДЫ ============
-@Composable
-fun TeamColumn(
-    title: String, image: ImageBitmap?, onImageClick: () -> Unit, name: String, onNameChange: (String) -> Unit
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(180.dp)) {
-        Text(title, color = Color(0xFF1976D2), fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Box(
-            modifier = Modifier.size(140.dp).clip(CircleShape).background(Color(0xFFE0E0E0))
-                .clickable { onImageClick() }, contentAlignment = Alignment.Center
-        ) {
-            if (image != null) {
-                Image(
-                    bitmap = image,
-                    contentDescription = "Logo",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Image(
-                    painter = painterResource("vsavphoto.png"),
-                    contentDescription = "Добавить фото",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Box(
-            modifier = Modifier.fillMaxWidth().height(40.dp).background(Color(0xFF455A64), RoundedCornerShape(12.dp)),
-            contentAlignment = Alignment.CenterStart
-        ) {
-            BasicTextField(
-                value = name,
-                onValueChange = onNameChange,
-                singleLine = true,
-                textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
-                decorationBox = { innerTextField ->
-                    Box(modifier = Modifier.padding(horizontal = 12.dp)) {
-                        if (name.isEmpty()) {
-                            Text("...", color = Color.LightGray, fontSize = 14.sp)
-                        }
-                        innerTextField()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-    }
-}
 
 @Composable
 fun AnimatedIconButton(
