@@ -1,9 +1,7 @@
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -13,8 +11,6 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
@@ -25,11 +21,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
-import androidx.compose.ui.window.WindowState
+import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import ui.components.drawBlurredRoundRect
 import ui.theme.AppStrings
 import java.awt.GraphicsEnvironment
 import java.awt.Rectangle
@@ -75,7 +70,7 @@ fun ApplicationScope.ExternalScoreboardWindow(
     val b = display.bounds
     // Состояние пересоздаём при смене экрана, чтобы окно сразу открывалось на нужном мониторе.
     val state = remember(display.id, b.x, b.y, b.width, b.height) {
-        WindowState(
+        androidx.compose.ui.window.WindowState(
             position = WindowPosition(b.x.dp, b.y.dp),
             size = DpSize(b.width.dp, b.height.dp),
         )
@@ -93,29 +88,19 @@ fun ApplicationScope.ExternalScoreboardWindow(
         // Страховка: некоторые ОС игнорируют стартовую позицию — выставляем границы явно.
         LaunchedEffect(display) { window.bounds = Rectangle(b) }
 
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
+        // Табло занимает весь экран ТВ: масштаб подбирается по самой рамке 1129×698 (без полей под свечение).
+        Box(Modifier.fillMaxSize().background(Color(0xFF070F2B))) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
-                val fitScale = minOf(maxWidth.value / 1575f, maxHeight.value / 1144f)
+                val fitScale = minOf(maxWidth.value / 1129f, maxHeight.value / 698f)
                 val baseDensity = LocalDensity.current
                 CompositionLocalProvider(
                     LocalDensity provides Density(baseDensity.density * fitScale, 1f),
                 ) {
-                    Box(Modifier.align(Alignment.Center).requiredSize(1575.dp, 1144.dp)) {
-                        Canvas(Modifier.fillMaxSize()) {
-                            val u = 1.dp.toPx()
-                            drawBlurredRoundRect(
-                                topLeft = Offset(229.7f * u, 229.7f * u),
-                                size = Size(1115f * u, 684f * u),
-                                corner = 40f * u,
-                                color = Color(0xFF91C0DC),
-                                sigma = 111.35f * u,
-                            )
-                        }
+                    Box(Modifier.align(Alignment.Center).requiredSize(1129.dp, 698.dp)) {
                         AudienceScreen(
                             match = match,
                             logo1 = logo1,
                             logo2 = logo2,
-                            modifier = Modifier.offset(223.dp, 223.dp),
                             tickerText = tickerText,
                             courtSide = courtSide,
                             strings = strings,
@@ -124,5 +109,14 @@ fun ApplicationScope.ExternalScoreboardWindow(
                 }
             }
         }
+    }
+}
+
+/** Windows: переключает режим экранов на «Расширить» (как Win+P → Расширить), чтобы ТВ не дублировал ноутбук. */
+fun forceExtendedDisplayOnWindows() {
+    if (!System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) return
+    runCatching {
+        ProcessBuilder("DisplaySwitch.exe", "/extend").start()
+            .waitFor(3, java.util.concurrent.TimeUnit.SECONDS)
     }
 }

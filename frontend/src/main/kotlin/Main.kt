@@ -137,7 +137,12 @@ data class MatchState(
     }
 }
 
-fun main() = application {
+fun main() {
+    forceExtendedDisplayOnWindows()
+    runApp()
+}
+
+private fun runApp() = application {
     var currentScreen by remember { mutableStateOf(Screen.menu) }
     var showSetupDialog by remember { mutableStateOf(false) }
     var selectedGame by remember { mutableStateOf(Screen.tennis) }
