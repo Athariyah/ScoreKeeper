@@ -442,11 +442,12 @@ private fun ScorePill(
     width: Dp = 92.dp,
     height: Dp = 64.dp,
     fontSize: TextUnit = 36.sp,
+    corner: Dp = 20.dp,
 ) {
     val colors = ScoreKeeperTheme.colors
     val type = ScoreKeeperTheme.typography
     Box(
-        modifier.size(width, height).clip(RoundedCornerShape(20.dp)).background(colors.pillBg),
+        modifier.size(width, height).clip(RoundedCornerShape(corner)).background(colors.pillBg),
         contentAlignment = Alignment.Center,
     ) {
         BasicText(
@@ -471,6 +472,101 @@ private fun CardTab(text: String, modifier: Modifier = Modifier, width: Dp = 230
             style = type.teamLabel.copy(fontSize = 26.sp, color = colors.headingBlue),
             maxLines = 1, softWrap = false,
         )
+    }
+}
+
+/** Жёлтый индикатор подачи: кружок #FFBF00 r15 со свечением (фильтр из SVG панельки подач). */
+@Composable
+private fun ServeGlowDot(modifier: Modifier = Modifier) {
+    Canvas(modifier.size(40.dp)) {
+        drawBlurredRoundRect(
+            topLeft = Offset(2.dp.toPx(), 2.dp.toPx()),
+            size = Size(36.dp.toPx(), 36.dp.toPx()),
+            corner = 18.dp.toPx(),
+            color = Color(0xFFFFBF00).copy(alpha = 0.30f),
+            sigma = 4.4.dp.toPx(),
+        )
+        drawCircle(
+            Color(0xFFFFBF00),
+            radius = 15.dp.toPx(),
+            center = Offset(20.dp.toPx(), 20.dp.toPx()),
+        )
+    }
+}
+
+/**
+ * Панелька партий и подачи под предпросмотром — один в один по присланному SVG:
+ * карточка 1088×205 r49.5, диски команд r40 с центрами (96.5, 51.5) и (96.5, 155.5),
+ * пилюли счёта 90×53 r26.5, вкладка «ПАРТИЯ N» 213×43 на верхнем крае и линии по бокам неё,
+ * разделитель строк и жёлтый кружок справа-снизу от диска подающей команды.
+ */
+@Composable
+private fun SetsServePanel(
+    name1: String,
+    name2: String,
+    logo1: ImageBitmap?,
+    logo2: ImageBitmap?,
+    sets1: Int,
+    sets2: Int,
+    server: Int,
+    tabText: String,
+    modifier: Modifier = Modifier,
+) {
+    val colors = ScoreKeeperTheme.colors
+    val type = ScoreKeeperTheme.typography
+    Box(modifier.size(1088.dp, 205.dp)) {
+        // сама карточка
+        Box(
+            Modifier.fillMaxSize()
+                .cardShadow(49.5.dp)
+                .clip(RoundedCornerShape(49.5.dp))
+                .background(colors.cardSurface)
+                .border(1.dp, colors.divider, RoundedCornerShape(49.5.dp)),
+        )
+        // тонкие линии по бокам вкладки «ПАРТИЯ N»
+        Box(Modifier.offset(161.5.dp, 10.dp).size(250.dp, 2.dp).clip(RoundedCornerShape(1.dp)).background(colors.divider))
+        Box(Modifier.offset(675.5.dp, 11.dp).size(250.dp, 2.dp).clip(RoundedCornerShape(1.dp)).background(colors.divider))
+        // разделитель между строками команд
+        Box(Modifier.offset(55.5.dp, 103.dp).size(976.dp, 2.dp).background(colors.divider))
+        // диски команд и индикатор подачи справа-снизу от диска
+        TeamLogoCircle(logo1, Modifier.offset(56.5.dp, 11.5.dp))
+        TeamLogoCircle(logo2, Modifier.offset(56.5.dp, 115.5.dp))
+        if (server == 0) ServeGlowDot(Modifier.offset(101.5.dp, 57.5.dp))
+        if (server == 1) ServeGlowDot(Modifier.offset(101.5.dp, 161.5.dp))
+        // названия команд
+        Box(
+            Modifier.offset(163.5.dp, 11.5.dp).size(720.dp, 80.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            BasicText(
+                name1, style = type.teamLabel.copy(color = colors.headingBlue),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Box(
+            Modifier.offset(163.5.dp, 115.5.dp).size(720.dp, 80.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            BasicText(
+                name2, style = type.teamLabel.copy(color = colors.headingBlue),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        // пилюли выигранных партий
+        ScorePill("%02d".format(sets1), Modifier.offset(941.5.dp, 24.5.dp), width = 90.dp, height = 53.dp, fontSize = 32.sp, corner = 26.5.dp)
+        ScorePill("%02d".format(sets2), Modifier.offset(941.5.dp, 128.5.dp), width = 90.dp, height = 53.dp, fontSize = 32.sp, corner = 26.5.dp)
+        // вкладка «ПАРТИЯ N» на верхнем крае карточки
+        Box(
+            Modifier.offset(436.5.dp, (-11.5).dp).size(213.dp, 43.dp)
+                .clip(RoundedCornerShape(21.5.dp)).background(colors.pillBg),
+            contentAlignment = Alignment.Center,
+        ) {
+            BasicText(
+                tabText,
+                style = type.teamLabel.copy(color = colors.headingBlue, lineHeight = 32.sp),
+                maxLines = 1, softWrap = false,
+            )
+        }
     }
 }
 
@@ -1222,67 +1318,44 @@ fun VoleyballScreen(
             Box(Modifier.align(Alignment.Center).requiredSize(1920.dp, 1080.dp)) {
 
                 // ── Предпросмотр табло зрителей ──
+                // Табло как в макете: рамка 1115×684 в точке (68, 85), пространство табло
+                // 1129×698 (обводка 14 по центру контура рамки) — в масштабе 1:1, без панели-обёртки.
                 Box(
-                    Modifier.offset(90.dp, 80.dp).size(1100.dp, 694.dp)
-                        .clip(RoundedCornerShape(30.dp))
-                        .border(5.dp, colors.previewBorder, RoundedCornerShape(30.dp)),
+                    Modifier.offset(61.dp, 78.dp).size(1129.dp, 698.dp)
+                        .drawBehind {
+                            drawBlurredRoundRect(
+                                topLeft = Offset(7.dp.toPx(), 7.dp.toPx()),
+                                size = Size(1115.dp.toPx(), 684.dp.toPx()),
+                                corner = 40.dp.toPx(),
+                                color = Color(0xFF91C0DC).copy(alpha = 0.55f),
+                                sigma = 28.dp.toPx(),
+                            )
+                        },
                 ) {
-                    // Табло 1129×698 — равномерно вписываем в панель предпросмотра (контент 1086×675).
-                    Box(
-                        Modifier.offset(7.dp, 11.dp).requiredSize(1129.dp, 698.dp)
-                            .graphicsLayer {
-                                val fit = 1086f / 1129f
-                                scaleX = fit
-                                scaleY = fit
-                                transformOrigin = TransformOrigin(0f, 0f)
-                            },
-                    ) {
-                        AudienceScreen(
-                            match = match,
-                            logo1 = logo1,
-                            logo2 = logo2,
-                            tickerText = tickerText,
-                            courtSide = courtSide,
-                            strings = strings,
-                            preview = true,
-                            onDisplayText = { showTextDialog = true },
-                        )
-                    }
-
+                    AudienceScreen(
+                        match = match,
+                        logo1 = logo1,
+                        logo2 = logo2,
+                        tickerText = tickerText,
+                        courtSide = courtSide,
+                        strings = strings,
+                        preview = true,
+                        onDisplayText = { showTextDialog = true },
+                    )
                 }
 
-                // ── Нижняя левая карточка: партии ──
-                Box(
-                    Modifier.offset(90.dp, 816.dp).size(1100.dp, 200.dp)
-                        .cardShadow(36.dp)
-                        .clip(RoundedCornerShape(36.dp))
-                        .background(colors.cardSurface),
-                ) {
-                    TeamLogoCircle(logo1, Modifier.offset(48.dp, 8.dp))
-                    TeamLogoCircle(logo2, Modifier.offset(48.dp, 112.dp))
-                    Box(
-                        Modifier.offset(156.dp, 8.dp).size(720.dp, 80.dp),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        BasicText(
-                            displayName1, style = type.teamLabel.copy(color = colors.headingBlue),
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Box(
-                        Modifier.offset(156.dp, 112.dp).size(720.dp, 80.dp),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        BasicText(
-                            displayName2, style = type.teamLabel.copy(color = colors.headingBlue),
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Box(Modifier.offset(48.dp, 99.dp).size(974.dp, 2.dp).background(colors.divider))
-                    ScorePill("%02d".format(match.sets1), Modifier.offset(934.dp, 20.dp), width = 88.dp, height = 56.dp, fontSize = 30.sp)
-                    ScorePill("%02d".format(match.sets2), Modifier.offset(934.dp, 124.dp), width = 88.dp, height = 56.dp, fontSize = 30.sp)
-                }
-                CardTab("${strings.setTab} ${match.currentSet}", Modifier.offset(525.dp, 790.dp))
+                // ── Нижняя левая карточка: партии и подача (геометрия — по присланному SVG) ──
+                SetsServePanel(
+                    name1 = displayName1,
+                    name2 = displayName2,
+                    logo1 = logo1,
+                    logo2 = logo2,
+                    sets1 = match.sets1,
+                    sets2 = match.sets2,
+                    server = match.server,
+                    tabText = "${strings.setTab} ${match.currentSet}",
+                    modifier = Modifier.offset(81.dp, 812.dp),
+                )
 
                 // ── Верхняя панель: таймер (не кликабелен), настройки, назад ──
                 TimerIcon(colors.headingText, Modifier.offset(1356.dp, 36.dp))
@@ -1689,7 +1762,7 @@ fun AudienceScreen(
                     // точка подачи (на ободе диска подающей команды)
                     drawCircle(
                         Color(0xFFFFBF00), 15f,
-                        if (live.server == 0) Offset(371f, 257f) else Offset(759f, 257f),
+                        if (live.server == 0) Offset(371f, 257f) else Offset(845f, 257f),
                     )
                 }
                 // рамка: градиентная обводка 14
