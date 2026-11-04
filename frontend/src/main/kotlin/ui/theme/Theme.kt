@@ -265,6 +265,7 @@ class AppStrings(
     val enterTextTitle: String,
     val setsLabel: String,
     val courtSideLabel: String,
+    val winnerLabel: String,
 )
 
 val RuStrings = AppStrings(
@@ -302,6 +303,7 @@ val RuStrings = AppStrings(
     enterTextTitle = "ВВЕДИТЕ ТЕКСТ ДЛЯ ВЫВОДА\nЕГО НА ЭКРАН.",
     setsLabel = "ПАРТИИ",
     courtSideLabel = "СТОРОНА ПОЛЯ\nПОДАЮЩЕЙ КОМАНДЫ",
+    winnerLabel = "ПОБЕДИТЕЛЬ",
 )
 
 val EnStrings = AppStrings(
@@ -339,6 +341,7 @@ val EnStrings = AppStrings(
     enterTextTitle = "ENTER TEXT TO DISPLAY\nIT ON THE SCREEN.",
     setsLabel = "SETS",
     courtSideLabel = "SERVING TEAM'S\nCOURT SIDE",
+    winnerLabel = "WINNER",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings =
