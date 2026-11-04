@@ -509,6 +509,7 @@ private fun SetsServePanel(
     sets1: Int,
     sets2: Int,
     server: Int,
+    showServe: Boolean,
     tabText: String,
     modifier: Modifier = Modifier,
 ) {
@@ -531,8 +532,8 @@ private fun SetsServePanel(
         // диски команд и индикатор подачи справа-снизу от диска
         TeamLogoCircle(logo1, Modifier.offset(56.5.dp, 11.5.dp))
         TeamLogoCircle(logo2, Modifier.offset(56.5.dp, 115.5.dp))
-        if (server == 0) ServeGlowDot(Modifier.offset(101.5.dp, 57.5.dp))
-        if (server == 1) ServeGlowDot(Modifier.offset(101.5.dp, 161.5.dp))
+        if (showServe && server == 0) ServeGlowDot(Modifier.offset(101.5.dp, 57.5.dp))
+        if (showServe && server == 1) ServeGlowDot(Modifier.offset(101.5.dp, 161.5.dp))
         // названия команд
         Box(
             Modifier.offset(163.5.dp, 11.5.dp).size(720.dp, 80.dp),
@@ -1353,6 +1354,7 @@ fun VoleyballScreen(
                     sets1 = match.sets1,
                     sets2 = match.sets2,
                     server = match.server,
+                    showServe = match.status != "NOT_STARTED",
                     tabText = "${strings.setTab} ${match.currentSet}",
                     modifier = Modifier.offset(81.dp, 812.dp),
                 )
@@ -1366,7 +1368,11 @@ fun VoleyballScreen(
                     maxLines = 1, softWrap = false,
                 )
                 SettingsButton(onClick = onSettings, modifier = Modifier.offset(1536.dp, 27.dp))
-                BackPill(strings.back, onBack, Modifier.offset(1634.dp, 28.dp))
+                BackPill(strings.back, {
+                    // Выход в меню: сначала сбрасываем матч на сервере (/reset), затем уходим на главный экран.
+                    ApiClient.reset(onResult = apply, onError = { errorMsg = it })
+                    onBack()
+                }, Modifier.offset(1634.dp, 28.dp))
 
                 // ── Заголовок вида спорта ──
                 if (isTennis) {
@@ -1759,11 +1765,13 @@ fun AudienceScreen(
                     )
                     drawLine(Color.White, Offset(564f, 436f), Offset(564f, 486f), strokeWidth = 2f)
                     drawCircle(Color(0xFF070F2B), 36f, bc, style = Stroke(2f))
-                    // точка подачи (на ободе диска подающей команды)
-                    drawCircle(
-                        Color(0xFFFFBF00), 15f,
-                        if (live.server == 0) Offset(371f, 257f) else Offset(845f, 257f),
-                    )
+                    // точка подачи (на ободе диска подающей команды) — только когда матч начат
+                    if (live.status != "NOT_STARTED") {
+                        drawCircle(
+                            Color(0xFFFFBF00), 15f,
+                            if (live.server == 0) Offset(371f, 257f) else Offset(845f, 257f),
+                        )
+                    }
                 }
                 // рамка: градиентная обводка 14
                 drawRoundRect(
