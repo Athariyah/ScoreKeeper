@@ -172,7 +172,10 @@ fun main() = application {
                     onBack = { currentScreen = Screen.menu },
                     name1 = gameName1, name2 = gameName2, logo1 = gameLogo1, logo2 = gameLogo2,
                     match = match, onMatchUpdate = { match = it },
-                    tickerText = tickerText, onTickerUpdate = { tickerText = it } // 👈 ПЕРЕДАЕМ ТЕКСТ
+                    tickerText = tickerText, onTickerUpdate = { tickerText = it }, // 👈 ПЕРЕДАЕМ ТЕКСТ
+                    darkTheme = darkTheme,
+                    language = language,
+                    onSettings = { showSettings = true }
                 )
             }
 
