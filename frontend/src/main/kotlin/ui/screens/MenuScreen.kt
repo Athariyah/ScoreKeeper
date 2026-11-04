@@ -26,15 +26,19 @@ import androidx.compose.ui.unit.dp
 import ui.components.CloseButton
 import ui.components.GlassCard
 import ui.components.InfoChip
+import ui.components.MinimizeButton
 import ui.components.OvalsCanvas
 import ui.components.SettingsButton
 import ui.components.SportButton
 import ui.components.TennisBallIcon
 import ui.components.VolleyballIcon
 import ui.components.rememberOvalsAnimation
+import ui.theme.AppLanguage
 import ui.theme.DesignStage
 import ui.theme.LocalStage
 import ui.theme.ScoreKeeperTheme
+import ui.theme.colorsFor
+import ui.theme.stringsFor
 
 /**
  * Главный экран. Координаты взяты из Figma (кадр «Главный экран», 1920×1080).
@@ -46,9 +50,13 @@ fun MenuScreen(
     onTennis: () -> Unit,
     onSettings: () -> Unit,
     onExit: () -> Unit,
+    onMinimize: () -> Unit,
+    darkTheme: Boolean,
+    language: AppLanguage,
 ) {
-    ScoreKeeperTheme {
+    ScoreKeeperTheme(colors = colorsFor(darkTheme), strings = stringsFor(language)) {
         val colors = ScoreKeeperTheme.colors
+        val strings = ScoreKeeperTheme.strings
         DesignStage {
             val stage = LocalStage.current
             val ovals = rememberOvalsAnimation()
@@ -72,7 +80,7 @@ fun MenuScreen(
                     Title(Modifier.offset(293.dp, 146.dp))
 
                     SportButton(
-                        label = "ВОЛЕЙБОЛ",
+                        label = strings.volleyball,
                         onClick = onVolleyball,
                         modifier = Modifier.offset(55.dp, 540.dp),
                         iconStart = 35.dp,
@@ -80,7 +88,7 @@ fun MenuScreen(
                     ) { m -> VolleyballIcon(m) }
 
                     SportButton(
-                        label = "ТЕННИС",
+                        label = strings.tennis,
                         onClick = onTennis,
                         modifier = Modifier.offset(575.dp, 540.dp),
                         iconStart = 28.dp,
@@ -94,6 +102,7 @@ fun MenuScreen(
                 Modifier.align(Alignment.TopEnd).padding(top = 27.dp, end = 44.dp),
                 horizontalArrangement = Arrangement.spacedBy(30.dp),
             ) {
+                MinimizeButton(onMinimize)
                 SettingsButton(onSettings)
                 CloseButton(onExit)
             }

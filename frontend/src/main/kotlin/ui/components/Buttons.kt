@@ -220,6 +220,20 @@ fun SettingsButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 @Composable
+fun MinimizeButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    // У окна нет системной рамки (undecorated), поэтому сворачивание — своя кнопка «–».
+    RoundIconButton(onClick, modifier, hoverTurn = 0f) { tint, m ->
+        Canvas(m.size(24.dp)) {
+            val w = 5.5.dp.toPx()
+            drawLine(
+                tint, Offset(w / 2f, size.height / 2f), Offset(size.width - w / 2f, size.height / 2f),
+                w, StrokeCap.Round,
+            )
+        }
+    }
+}
+
+@Composable
 fun CloseButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     RoundIconButton(onClick, modifier, hoverTurn = 90f) { tint, m ->
         Canvas(m.size(24.dp)) {
