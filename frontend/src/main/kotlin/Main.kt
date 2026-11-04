@@ -157,6 +157,15 @@ fun main() = application {
     var language by remember { mutableStateOf(AppLanguage.RU) }
     var showSettings by remember { mutableStateOf(false) }
 
+    // Загрузочный экран: при запуске приложения и при переходах меню ↔ режим игры.
+    var splashVisible by remember { mutableStateOf(true) }
+    var splashKey by remember { mutableStateOf(0) }
+    LaunchedEffect(splashKey) {
+        splashVisible = true
+        delay(if (splashKey == 0) 1_100 else 700)
+        splashVisible = false
+    }
+
     // Безрамочное окно на весь экран: Maximized + undecorated — верхней системной
     // панельки не видно, но это обычное окно (не эксклюзивный Fullscreen), поэтому
     // Alt+Tab работает мгновенно, а свернуть можно кнопкой «–» в меню или с панели задач.
@@ -181,7 +190,7 @@ fun main() = application {
 
                 Screen.tennis, Screen.valeball -> VoleyballScreen(
                     sport = if (currentScreen == Screen.tennis) "tennis" else "volleyball",
-                    onBack = { currentScreen = Screen.menu },
+                    onBack = { currentScreen = Screen.menu; splashKey++ },
                     name1 = gameName1, name2 = gameName2, logo1 = gameLogo1, logo2 = gameLogo2,
                     match = match, onMatchUpdate = { match = it },
                     tickerText = tickerText, onTickerUpdate = { tickerText = it }, // 👈 ПЕРЕДАЕМ ТЕКСТ
@@ -207,7 +216,7 @@ fun main() = application {
                     onBack = { showSetupDialog = false },
                     onDone = { logo1, name1, logo2, name2 ->
                         gameLogo1 = logo1; gameName1 = name1; gameLogo2 = logo2; gameName2 = name2
-                        showSetupDialog = false; currentScreen = selectedGame
+                        showSetupDialog = false; currentScreen = selectedGame; splashKey++
                     },
                 )
             }
@@ -221,6 +230,8 @@ fun main() = application {
                     onBack = { showSettings = false },
                 )
             }
+
+            SplashOverlay(visible = splashVisible, language = language)
         }
     }
 
@@ -264,6 +275,60 @@ fun main() = application {
                     }
                 }
             }
+        }
+    }
+}
+
+/** Загрузочный экран на всё окно: логотип, название и спиннер. */
+@Composable
+private fun SplashOverlay(visible: Boolean, language: AppLanguage) {
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(250),
+        label = "splashAlpha",
+    )
+    if (alpha <= 0.01f) return
+    Box(
+        Modifier.fillMaxSize()
+            .graphicsLayer { this.alpha = alpha }
+            .background(
+                Brush.verticalGradient(listOf(Color(0xFF160B3D), Color(0xFF070F2B)))
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { /* на время загрузки клики не проходят в экран под сплэшем */ },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Image(
+                painter = painterResource("app_icon.png"),
+                contentDescription = null,
+                modifier = Modifier.size(180.dp).clip(RoundedCornerShape(40.dp)),
+            )
+            Spacer(Modifier.height(28.dp))
+            Text(
+                "ScoreKeeper",
+                color = Color.White,
+                fontSize = 42.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = 42.sp,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(26.dp))
+            CircularProgressIndicator(
+                color = Color(0xFFFFC838),
+                strokeWidth = 6.dp,
+                modifier = Modifier.size(54.dp),
+            )
+            Spacer(Modifier.height(18.dp))
+            Text(
+                if (language == AppLanguage.RU) "Загрузка..." else "Loading...",
+                color = Color.White.copy(alpha = 0.82f),
+                fontSize = 20.sp,
+                lineHeight = 20.sp,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
@@ -713,7 +778,7 @@ private fun ServeCoin(
     }
 }
 
-/** Стрелка выбора стороны поля: контур #9EC8E2, заливка жёлтая — выбранная, серая — нет. Размер 172×48 по SVG корректировки. */
+/** Стрелка выбора стороны поля: точная геометрия из SVG 164×56; заливка #FFD95D — выбранная сторона, #848484 — нет. */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun SideArrow(
@@ -724,69 +789,68 @@ private fun SideArrow(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val scale = rememberPressScale(interaction)
+    val linePath = remember(toLeft) {
+        PathParser().parsePathString(
+            if (toLeft) "M156.889 28L17.9998 28" else "M6.49999 28L145.389 28"
+        ).toPath()
+    }
+    val outerPath = remember(toLeft) {
+        PathParser().parsePathString(
+            if (toLeft) "M1.9915 26.4296C0.976059 27.2303 0.976062 28.7697 1.9915 29.5705L27.5116 49.695C28.8233 50.7294 30.75 49.795 30.75 48.1245V7.87548C30.75 6.20498 28.8233 5.27064 27.5116 6.30503L1.9915 26.4296Z" else "M161.397 29.5704C162.413 28.7697 162.413 27.2303 161.397 26.4295L135.877 6.30503C134.565 5.27063 132.639 6.20498 132.639 7.87548V48.1245C132.639 49.795 134.565 50.7294 135.877 49.695L161.397 29.5704Z"
+        ).toPath()
+    }
+    val innerPath = remember(toLeft) {
+        PathParser().parsePathString(
+            if (toLeft) "M5.10278 26.931C4.55767 27.3341 4.56315 28.1513 5.11362 28.547L26.4163 43.8615C27.0778 44.3371 28 43.8643 28 43.0495V11.9831C28 11.1622 27.0655 10.691 26.4054 11.1791L5.10278 26.931Z" else "M158.286 29.069C158.831 28.6659 158.826 27.8487 158.275 27.453L136.972 12.1385C136.311 11.6629 135.389 12.1357 135.389 12.9505V44.0169C135.389 44.8378 136.323 45.309 136.983 44.8209L158.286 29.069Z"
+        ).toPath()
+    }
     Canvas(
-        modifier.size(172.dp, 48.dp)
+        modifier.size(164.dp, 56.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .hoverable(interaction).pointerHoverIcon(PointerIcon.Hand)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
     ) {
         val u = 1.dp.toPx()
         val fill = if (selected) CoinGold else CoinGray
-        fun x(local: Float) = if (toLeft) local else 172f - local
         withTransform({ scale(u, u, Offset.Zero) }) {
-            drawLine(CoinRing, Offset(x(18f), 24f), Offset(x(157f), 24f), strokeWidth = 13f, cap = StrokeCap.Round)
-            val headOuter = Path().apply {
-                moveTo(x(2f), 24f); lineTo(x(31f), 3f); lineTo(x(31f), 45f); close()
-            }
-            drawPath(headOuter, CoinRing)
-            drawLine(fill, Offset(x(10f), 24f), Offset(x(157f), 24f), strokeWidth = 8f, cap = StrokeCap.Round)
-            val headInner = Path().apply {
-                moveTo(x(5f), 24f); lineTo(x(28f), 7f); lineTo(x(28f), 41f); close()
-            }
-            drawPath(headInner, fill)
+            drawPath(linePath, CoinRing, style = Stroke(width = 13f, cap = StrokeCap.Round))
+            drawPath(outerPath, CoinRing)
+            drawRoundRect(
+                fill,
+                Offset(if (toLeft) 12f else 2.38867f, 24f),
+                Size(149f, 8f),
+                CornerRadius(4f, 4f),
+            )
+            drawPath(innerPath, fill)
         }
     }
 }
 
-/** Круглый индикатор L/R между стрелками: выбранная половина белая (буква синяя), вторая — серая (буква #BCBCBC). */
+/** Круглый указатель L/R между стрелками: точные контуры и глифы букв из SVG 40×40. */
 @Composable
 private fun LrBadge(courtSide: String, modifier: Modifier = Modifier) {
-    val colors = ScoreKeeperTheme.colors
-    val type = ScoreKeeperTheme.typography
-    Box(modifier.size(40.dp)) {
-        Canvas(Modifier.matchParentSize()) {
-            val r = size.minDimension / 2f
-            val c = Offset(size.width / 2f, size.height / 2f)
-            drawCircle(CoinGray, r, c)
+    val basePath = remember { PathParser().parsePathString("M39 20C39 30.4934 30.4934 39 20 39C9.50659 39 1 30.4934 1 20C1 9.50659 9.50659 1 20 1C30.4934 1 39 9.50659 39 20Z").toPath() }
+    val leftLetterPath = remember { PathParser().parsePathString("M7.19883 25.6V14.4C7.19883 14.0133 7.33216 13.6867 7.59883 13.42C7.87883 13.14 8.21216 13 8.59883 13C8.9855 13 9.31883 13.14 9.59883 13.42C9.86549 13.6867 9.99883 14.0133 9.99883 14.4V24.2H16.5988C16.9855 24.2 17.3188 24.3333 17.5988 24.6C17.8655 24.88 17.9988 25.2133 17.9988 25.6C17.9988 25.9867 17.8655 26.3133 17.5988 26.58C17.3188 26.86 16.9855 27 16.5988 27H8.59883C8.21216 27 7.87883 26.86 7.59883 26.58C7.33216 26.3133 7.19883 25.9867 7.19883 25.6Z").toPath() }
+    val rightLetterPath = remember { PathParser().parsePathString("M24.993 15.8V20.2H29.593C30.193 20.2 30.713 19.9867 31.153 19.56C31.5796 19.12 31.793 18.6 31.793 18C31.793 17.3867 31.5796 16.8667 31.153 16.44C30.713 16.0133 30.193 15.8 29.593 15.8H24.993ZM22.193 25.6V14.4C22.193 14.0133 22.3263 13.68 22.593 13.4C22.873 13.1333 23.2063 13 23.593 13H29.593C30.9663 13 32.1463 13.4867 33.133 14.46C34.1063 15.4467 34.593 16.6267 34.593 18C34.593 18.9067 34.3663 19.7467 33.913 20.52C33.4596 21.2667 32.8596 21.86 32.113 22.3L34.233 24.66C34.4863 24.9533 34.6063 25.2933 34.593 25.68C34.5663 26.0667 34.413 26.3867 34.133 26.64C33.8663 26.88 33.553 27 33.193 27C32.7796 27 32.433 26.8467 32.153 26.54L28.973 23H24.993V25.6C24.993 25.9867 24.8596 26.3133 24.593 26.58C24.313 26.86 23.9796 27 23.593 27C23.2063 27 22.873 26.86 22.593 26.58C22.3263 26.3133 22.193 25.9867 22.193 25.6Z").toPath() }
+    Canvas(modifier.size(40.dp)) {
+        val u = size.minDimension / 40f
+        withTransform({ scale(u, u, Offset.Zero) }) {
+            drawPath(basePath, CoinGray)
+            drawPath(basePath, CoinRing, style = Stroke(2f))
             drawArc(
                 Color.White,
                 startAngle = if (courtSide == "L") 90f else -90f,
                 sweepAngle = 180f, useCenter = true,
-                topLeft = Offset(c.x - r, c.y - r), size = Size(2 * r, 2 * r),
+                topLeft = Offset(3f, 3f), size = Size(34f, 34f),
             )
-            drawCircle(CoinRing, r - 1.dp.toPx(), c, style = Stroke(2.dp.toPx()))
-        }
-        Row(Modifier.fillMaxSize()) {
-            Box(Modifier.weight(1f).fillMaxHeight(), Alignment.Center) {
-                BasicText(
-                    "L",
-                    style = type.caption.copy(
-                        fontSize = 19.sp,
-                        color = if (courtSide == "L") colors.headingBlue else Color(0xFFBCBCBC),
-                    ),
-                    maxLines = 1, softWrap = false,
-                )
-            }
-            Box(Modifier.weight(1f).fillMaxHeight(), Alignment.Center) {
-                BasicText(
-                    "R",
-                    style = type.caption.copy(
-                        fontSize = 19.sp,
-                        color = if (courtSide == "R") colors.headingBlue else Color(0xFFBCBCBC),
-                    ),
-                    maxLines = 1, softWrap = false,
-                )
-            }
+            drawPath(
+                leftLetterPath,
+                if (courtSide == "L") Color(0xFF2070F5) else Color(0xFFBCBCBC),
+            )
+            drawPath(
+                rightLetterPath,
+                if (courtSide == "R") Color(0xFF2070F5) else Color(0xFFBCBCBC),
+            )
         }
     }
 }
@@ -879,8 +943,10 @@ private fun TossDialogOverlay(
     var serverSel by remember { mutableStateOf(0) }
     MatchDialogScaffold(cardHeight = 582.dp, onBack = onBack) {
         FigmaText(
-            strings.tossTitle, type.cardTitle, colors.headingBlue,
-            Modifier.offset(278.dp, 43.dp), TextAlign.Center, 239.dp,
+            strings.tossTitle,
+            type.cardTitle.copy(fontSize = 40.sp, lineHeight = 44.sp),
+            colors.headingBlue,
+            Modifier.offset(0.dp, 36.dp), TextAlign.Center, 794.dp,
         )
         Box(
             Modifier.offset(107.dp, 138.dp).size(205.dp, 42.dp),
@@ -984,7 +1050,7 @@ private fun CorrectionDialogOverlay(
     MatchDialogScaffold(cardHeight = 598.dp, onBack = onBack) {
         FigmaText(
             strings.correction, type.cardTitle, colors.headingBlue,
-            Modifier.offset(249.dp, 20.dp), TextAlign.Center, 298.dp,
+            Modifier.offset(0.dp, 20.dp), TextAlign.Center, 794.dp,
         )
         // команды и монеты подающего
         Box(
@@ -1012,10 +1078,18 @@ private fun CorrectionDialogOverlay(
 
         // очки и партии
         val labelStyle = type.teamLabel.copy(fontSize = 28.sp, color = colors.captionText)
-        BasicText(strings.pointsTab, style = labelStyle, modifier = Modifier.offset(74.dp, 162.dp), maxLines = 1, softWrap = false)
-        BasicText(strings.pointsTab, style = labelStyle, modifier = Modifier.offset(445.dp, 162.dp), maxLines = 1, softWrap = false)
-        BasicText(strings.setsLabel, style = labelStyle, modifier = Modifier.offset(74.dp, 268.dp), maxLines = 1, softWrap = false)
-        BasicText(strings.setsLabel, style = labelStyle, modifier = Modifier.offset(445.dp, 268.dp), maxLines = 1, softWrap = false)
+        Box(Modifier.offset(74.dp, 154.dp).size(170.dp, 53.dp), contentAlignment = Alignment.CenterStart) {
+            BasicText(strings.pointsTab, style = labelStyle, maxLines = 1, softWrap = false)
+        }
+        Box(Modifier.offset(445.dp, 154.dp).size(170.dp, 53.dp), contentAlignment = Alignment.CenterStart) {
+            BasicText(strings.pointsTab, style = labelStyle, maxLines = 1, softWrap = false)
+        }
+        Box(Modifier.offset(74.dp, 260.dp).size(170.dp, 53.dp), contentAlignment = Alignment.CenterStart) {
+            BasicText(strings.setsLabel, style = labelStyle, maxLines = 1, softWrap = false)
+        }
+        Box(Modifier.offset(445.dp, 260.dp).size(170.dp, 53.dp), contentAlignment = Alignment.CenterStart) {
+            BasicText(strings.setsLabel, style = labelStyle, maxLines = 1, softWrap = false)
+        }
         NumPillField(t1Score, { t1Score = it }, Modifier.offset(257.dp, 154.dp))
         NumPillField(t2Score, { t2Score = it }, Modifier.offset(628.dp, 154.dp))
         NumPillField(t1Sets, { t1Sets = it }, Modifier.offset(257.dp, 260.dp))
@@ -1024,20 +1098,20 @@ private fun CorrectionDialogOverlay(
         // сторона поля подающей команды
         FigmaText(
             strings.courtSideLabel,
-            type.cardTitle.copy(lineHeight = 22.sp),
+            type.cardTitle.copy(fontSize = 20.sp, lineHeight = 22.sp),
             colors.headingBlue,
-            Modifier.offset(269.dp, 403.dp), TextAlign.Center, 248.dp,
+            Modifier.offset(143.dp, 403.dp), TextAlign.Center, 500.dp,
         )
         SideArrow(
             toLeft = true, selected = courtSide == "L",
             onClick = { onCourtSideChange("L") },
-            modifier = Modifier.offset(200.dp, 450.dp),
+            modifier = Modifier.offset(200.dp, 446.dp),
         )
         LrBadge(courtSide, Modifier.offset(373.dp, 454.dp))
         SideArrow(
             toLeft = false, selected = courtSide == "R",
             onClick = { onCourtSideChange("R") },
-            modifier = Modifier.offset(413.dp, 450.dp),
+            modifier = Modifier.offset(422.dp, 446.dp),
         )
 
         DoneButton(
@@ -1440,17 +1514,33 @@ fun VoleyballScreen(
                     onCourtSideChange = onCourtSideChange,
                     onBack = { showCorrectionDialog = false },
                     onSubmit = { s1, s2, sets1, sets2, server ->
-                        ApiClient.setScore(
-                            VolleyballSetScore(
-                                sets = listOf(s1, s2),
-                                setsWon = listOf(sets1, sets2),
-                                currentSet = match.currentSet,
-                                server = server,
-                                status = match.status,
-                                winner = match.score1,
-                            ),
-                            onResult = apply,
-                        )
+                        if (isTennis) {
+                            ApiClient.setScore(
+                                TennisSetScore(
+                                    points = listOf(0, 0),
+                                    games = listOf(s1, s2),
+                                    setsWon = listOf(sets1, sets2),
+                                    server = server,
+                                    status = match.status,
+                                    winner = match.winner,
+                                ),
+                                onResult = apply,
+                                onError = { errorMsg = it },
+                            )
+                        } else {
+                            ApiClient.setScore(
+                                VolleyballSetScore(
+                                    sets = listOf(s1, s2),
+                                    setsWon = listOf(sets1, sets2),
+                                    currentSet = match.currentSet,
+                                    server = server,
+                                    status = match.status,
+                                    winner = match.winner,
+                                ),
+                                onResult = apply,
+                                onError = { errorMsg = it },
+                            )
+                        }
                         showCorrectionDialog = false
                     },
                 )
@@ -1564,12 +1654,10 @@ fun AudienceScreen(
                         Brush.horizontalGradient(listOf(Color(0xFFBA0C24), Color(0xFFF21B3F)), startX = 7f, endX = 1122f),
                         alpha = 0.9f,
                     )
-                    // матовые панели команд (белый 10%, контур #BABABA 2)
+                    // матовые панели команд (белый 10%, без контура — как в Figma)
                     withTransform({ translate(-222.7f, -222.7f) }) {
                         drawPath(panelLeft, Color.White.copy(alpha = 0.10f))
-                        drawPath(panelLeft, Color(0xFFBABABA), style = Stroke(2f))
                         drawPath(panelRight, Color.White.copy(alpha = 0.10f))
-                        drawPath(panelRight, Color(0xFFBABABA), style = Stroke(2f))
                     }
                     // плашки партий и пилюля «ПАРТИЯ N» (белый 10%)
                     drawRoundRect(Color.White.copy(alpha = 0.10f), Offset(228f, 332f), Size(200f, 102f), CornerRadius(17f, 17f))
@@ -1648,18 +1736,18 @@ fun AudienceScreen(
         }
 
         // Левая колонка
-        BoardText(live.team1.uppercase(), 328f, 301f, 38.sp, FontWeight.Normal)
-        BoardText("${live.sets1}", 328f, 370f, 64.sp, FontWeight.Bold)
-        BoardText(strings.setsLabel, 328f, 419f, 24.sp, FontWeight.Normal)
+        BoardText(live.team1.uppercase(), 328f, 298f, 35.sp, FontWeight.Normal)
+        BoardText("${live.sets1}", 328f, 370f, 62.sp, FontWeight.Bold)
+        BoardText(strings.setsLabel, 328f, 419f, 22.sp, FontWeight.Normal)
         BoardText("${live.score1}", 328f, 506f, 124.sp, FontWeight.Bold)
-        BoardText(strings.pointsTab, 328f, 591f, 33.sp, FontWeight.Normal)
+        BoardText(strings.pointsTab, 328f, 591f, 36.sp, FontWeight.Normal)
 
         // Правая колонка
-        BoardText(live.team2.uppercase(), 802f, 301f, 38.sp, FontWeight.Normal)
-        BoardText("${live.sets2}", 802f, 370f, 64.sp, FontWeight.Bold)
-        BoardText(strings.setsLabel, 802f, 419f, 24.sp, FontWeight.Normal)
+        BoardText(live.team2.uppercase(), 802f, 298f, 35.sp, FontWeight.Normal)
+        BoardText("${live.sets2}", 802f, 370f, 62.sp, FontWeight.Bold)
+        BoardText(strings.setsLabel, 802f, 419f, 22.sp, FontWeight.Normal)
         BoardText("${live.score2}", 802f, 506f, 124.sp, FontWeight.Bold)
-        BoardText(strings.pointsTab, 802f, 591f, 33.sp, FontWeight.Normal)
+        BoardText(strings.pointsTab, 802f, 591f, 36.sp, FontWeight.Normal)
 
         // Центр: «ПАРТИЯ N» и буквы бейджа (меняются местами со стороной подачи)
         BoardText("${strings.setTab} ${live.currentSet}", 564f, 600f, 35.sp, FontWeight.Normal, width = 211f)

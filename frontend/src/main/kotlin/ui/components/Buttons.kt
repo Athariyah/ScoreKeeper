@@ -124,17 +124,17 @@ fun SportButton(
     ) {
         icon(
             Modifier
-                .offset(iconStart, 32.dp)
+                .offset(iconStart, 32.5.dp)
                 .size(75.dp)
                 .graphicsLayer { rotationZ = 18f * hover.value },
         )
         Box(
-            Modifier.offset(labelCenterX - 103.5.dp, 51.dp).size(207.dp, 47.dp),
+            Modifier.offset(labelCenterX - 103.5.dp, 0.dp).size(207.dp, 140.dp),
             contentAlignment = Alignment.Center,
         ) {
             BasicText(
                 text = label,
-                style = type.button.copy(color = colors.onButton),
+                style = type.button.copy(color = colors.onButton, lineHeight = type.button.fontSize),
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Visible,

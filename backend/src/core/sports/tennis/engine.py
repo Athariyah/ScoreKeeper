@@ -57,7 +57,7 @@ class TennisEngine(AbstractMatchEngine):
         self.sets_won = list(state["sets_won"])
         self.current_server = int(state["server"])
         self.status = MatchStatus[state["status"]]
-        self.winner = state["winner"]
+        self.winner = state.get("winner")
         self.scoring_history.clear()
         
     def get_score(self) -> dict[str, Any]:
