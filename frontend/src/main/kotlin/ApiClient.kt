@@ -13,6 +13,8 @@ import io.ktor.websocket.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -131,23 +133,47 @@ object ApiClient {
         }
     }
 
+    // ── WebSocket: одно соединение, любое число подписчиков (предпросмотр + табло на ТВ) ──
+    private class WsListener(val onScore: (ScoreResponse) -> Unit, val onText: (String) -> Unit)
+
+    private val wsListeners = java.util.concurrent.CopyOnWriteArrayList<WsListener>()
     private var wsJob: Job? = null
-    fun connectScoreWs(onScore: (ScoreResponse) -> Unit, onText: (String) -> Unit = {}, onClosed: () -> Unit = {}, onError: ((String) -> Unit)? = null) {
-        if (wsJob?.isActive == true) return
-        wsJob = CoroutineScope(Dispatchers.IO).launch {
-            try {
-                client.webSocket(WS_URL) {
-                    for (frame in incoming) {
-                        if (frame !is Frame.Text) continue
-                        val root = runCatching { json.parseToJsonElement(frame.readText()).jsonObject }.getOrNull() ?: continue
-                        when (root["type"]?.jsonPrimitive?.content) {
-                            "score" -> root["data"]?.let { runCatching { json.decodeFromJsonElement<ScoreResponse>(it) }.getOrNull()?.let(onScore) }
-                            "text" -> root["data"]?.jsonPrimitive?.content?.let(onText)
+
+    /** Подписывается на счёт и текст. Возвращает функцию отписки; при отписке последнего соединение закрывается. */
+    @Synchronized
+    fun subscribeWs(onScore: (ScoreResponse) -> Unit, onText: (String) -> Unit = {}): () -> Unit {
+        val listener = WsListener(onScore, onText)
+        wsListeners += listener
+        if (wsJob?.isActive != true) {
+            wsJob = CoroutineScope(Dispatchers.IO).launch {
+                // Переподключение: бэкенд может подняться позже окна или перезапуститься.
+                while (isActive) {
+                    try {
+                        client.webSocket(WS_URL) {
+                            for (frame in incoming) {
+                                if (frame !is Frame.Text) continue
+                                val root = runCatching { json.parseToJsonElement(frame.readText()).jsonObject }.getOrNull() ?: continue
+                                when (root["type"]?.jsonPrimitive?.content) {
+                                    "score" -> root["data"]
+                                        ?.let { runCatching { json.decodeFromJsonElement<ScoreResponse>(it) }.getOrNull() }
+                                        ?.let { r -> wsListeners.forEach { it.onScore(r) } }
+                                    "text" -> root["data"]?.jsonPrimitive?.content
+                                        ?.let { t -> wsListeners.forEach { it.onText(t) } }
+                                }
+                            }
                         }
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
                     }
+                    delay(1_500)
                 }
-            } catch (e: Exception) { if (e !is kotlinx.coroutines.CancellationException) onError?.invoke(e.message ?: "WS error") } finally { onClosed() }
+            }
+        }
+        return {
+            synchronized(this) {
+                wsListeners -= listener
+                if (wsListeners.isEmpty()) { wsJob?.cancel(); wsJob = null }
+            }
         }
     }
-    fun disconnectWs() { wsJob?.cancel(); wsJob = null }
 }

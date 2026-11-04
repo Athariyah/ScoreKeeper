@@ -149,7 +149,8 @@ fun main() = application {
 
     var match by remember { mutableStateOf(MatchState()) }
     var courtSide by remember { mutableStateOf("L") } // сторона поля подающей команды (общая для админки и табло)
-    var showAudience by remember { mutableStateOf(false) }
+    // Внешний экран (ТВ по HDMI): табло открывается само, пока открыт экран счёта игры.
+    val externalDisplay by rememberExternalDisplay()
     var tickerText by remember { mutableStateOf("") } // 👈 ТЕКСТ ДЛЯ ЗРИТЕЛЕЙ
 
     // Настройки приложения (экран «Настройки»): тема и язык.
@@ -216,6 +217,15 @@ fun main() = application {
                     onBack = { showSetupDialog = false },
                     onDone = { logo1, name1, logo2, name2 ->
                         gameLogo1 = logo1; gameName1 = name1; gameLogo2 = logo2; gameName2 = name2
+                        // До старта матча бэкенд ещё не знает названий — кладём их в локальное состояние,
+                        // чтобы табло (в т.ч. на ТВ) сразу показывало введённые команды.
+                        val st = stringsFor(language)
+                        val tennis = selectedGame == Screen.tennis
+                        match = MatchState(
+                            team1 = name1.ifBlank { if (tennis) st.player1 else st.team1 },
+                            team2 = name2.ifBlank { if (tennis) st.player2 else st.team2 },
+                            sport = if (tennis) "tennis" else "volleyball",
+                        )
                         showSetupDialog = false; currentScreen = selectedGame; splashKey++
                     },
                 )
@@ -235,47 +245,18 @@ fun main() = application {
         }
     }
 
-    if (showAudience) {
-        Window(
-            onCloseRequest = { showAudience = false },
-            title = "ScoreKeeper - Табло",
-            icon = painterResource("app_icon.png"),
-            state = rememberWindowState(placement = WindowPlacement.Maximized),
-            undecorated = true,
-        ) {
-            // Дизайн «Экран предпросмотра»: табло по центру на чёрном, свечение σ≈111.
-            Box(Modifier.fillMaxSize().background(Color.Black)) {
-                BoxWithConstraints(Modifier.fillMaxSize()) {
-                    val fitScale = minOf(maxWidth.value / 1575f, maxHeight.value / 1144f)
-                    val baseDensity = LocalDensity.current
-                    CompositionLocalProvider(
-                        LocalDensity provides Density(baseDensity.density * fitScale, 1f),
-                    ) {
-                        Box(Modifier.align(Alignment.Center).requiredSize(1575.dp, 1144.dp)) {
-                            Canvas(Modifier.fillMaxSize()) {
-                                val u = 1.dp.toPx()
-                                drawBlurredRoundRect(
-                                    topLeft = Offset(229.7f * u, 229.7f * u),
-                                    size = Size(1115f * u, 684f * u),
-                                    corner = 40f * u,
-                                    color = Color(0xFF91C0DC),
-                                    sigma = 111.35f * u,
-                                )
-                            }
-                            AudienceScreen(
-                                match = match,
-                                logo1 = gameLogo1,
-                                logo2 = gameLogo2,
-                                modifier = Modifier.offset(223.dp, 223.dp),
-                                tickerText = tickerText,
-                                courtSide = courtSide,
-                                strings = stringsFor(language),
-                            ) // 👈 ПЕРЕДАЕМ ТЕКСТ
-                        }
-                    }
-                }
-            }
-        }
+    val inGame = currentScreen == Screen.tennis || currentScreen == Screen.valeball
+    val tv = externalDisplay
+    if (inGame && tv != null) {
+        ExternalScoreboardWindow(
+            display = tv,
+            match = match,
+            logo1 = gameLogo1,
+            logo2 = gameLogo2,
+            tickerText = tickerText,
+            courtSide = courtSide,
+            strings = stringsFor(language),
+        )
     }
 }
 
@@ -1699,11 +1680,12 @@ fun AudienceScreen(
     }
 
     DisposableEffect(Unit) {
-        ApiClient.connectScoreWs(
+        // Подписка у каждого табло своя (предпросмотр + ТВ), общее соединение закрывается по последнему.
+        val unsubscribe = ApiClient.subscribeWs(
             onScore = { r -> live = MatchState.fromResponse(r) },
             onText = { t -> shownText = t; textNonce++ },
         )
-        onDispose { ApiClient.disconnectWs() }
+        onDispose { unsubscribe() }
     }
 
     val panelLeft = remember { PathParser().parsePathString(PANEL_LEFT).toPath() }
