@@ -1369,7 +1369,10 @@ fun VoleyballScreen(
                 )
                 SettingsButton(onClick = onSettings, modifier = Modifier.offset(1536.dp, 27.dp))
                 BackPill(strings.back, {
-                    // Выход в меню: сначала сбрасываем матч на сервере (/reset), затем уходим на главный экран.
+                    // При выходе сразу скрываем сообщение на табло: локально и пустой рассылкой по WS.
+                    onTickerUpdate("")
+                    ApiClient.sendText("", onResult = {})
+                    // Сбрасываем матч на сервере (/reset), затем уходим на главный экран.
                     ApiClient.reset(onResult = apply, onError = { errorMsg = it })
                     onBack()
                 }, Modifier.offset(1634.dp, 28.dp))
@@ -1681,7 +1684,7 @@ fun AudienceScreen(
 
     LaunchedEffect(match) { live = match }
 
-    // Сообщение на табло: показываем ~7 секунд после появления, затем прячем.
+    // Сообщение на табло: показываем 4 секунды после появления, затем прячем.
     var shownText by remember { mutableStateOf(tickerText) }
     var textNonce by remember { mutableStateOf(0) }
     LaunchedEffect(tickerText) {
@@ -1690,7 +1693,7 @@ fun AudienceScreen(
     }
     LaunchedEffect(textNonce) {
         if (shownText.isNotBlank()) {
-            delay(7_000)
+            delay(4_000)
             shownText = ""
         }
     }
