@@ -91,12 +91,12 @@ val LightColors = ScoreKeeperColors(
     cardBorder = Color(0xFFE2EEF7),
     headingBlue = Color(0xFF2070F5),
     divider = Color(0xFFE4F0F8),
-    fieldBg = Color(0xFF465A72),
+    fieldBg = Color(0xFF465B72),
     fieldText = Color.White,
     fieldPlaceholder = Color(0xFFC7D3E0),
     captionText = Color.Black,
     doneButtonBg = Color(0xFF69DB7C),
-    onDoneButton = Color.Black,
+    onDoneButton = Color(0xFF343F4B),
 )
 
 /** Тёмная тема: тот же фирменный синий и яркие овалы, но на тёмно-синем фоне. */
@@ -128,7 +128,7 @@ val DarkColors = ScoreKeeperColors(
     fieldPlaceholder = Color(0xFF8FA3C0),
     captionText = Color(0xFFB9C6D8),
     doneButtonBg = Color(0xFF69DB7C),
-    onDoneButton = Color.Black,
+    onDoneButton = Color(0xFF343F4B),
 )
 
 // ───────────────────────── Шрифты и типографика ─────────────────────────
@@ -173,15 +173,33 @@ val DefaultTypography = ScoreKeeperTypography(
     ),
     // Подписи внизу: в Figma — Sans Serif Collection Regular 15.
     chip = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 15.sp),
-    heading = TextStyle(fontFamily = ClearSans, fontWeight = FontWeight.Bold, fontSize = 40.sp),
-    cardTitle = TextStyle(
-        fontFamily = ClearSans, fontWeight = FontWeight.Bold,
-        fontSize = 28.sp, lineHeight = 34.sp, textAlign = TextAlign.Center,
+    // Тексты карточек в Figma — Aqum two Classic (заголовок настройки — 28, остальное замерено по макету).
+    heading = TextStyle(
+        fontFamily = AqumTwo,
+        fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
+        fontSize = 34.sp,
     ),
-    teamLabel = TextStyle(fontFamily = ClearSans, fontWeight = FontWeight.Bold, fontSize = 32.sp),
-    caption = TextStyle(fontFamily = ClearSans, fontWeight = FontWeight.Bold, fontSize = 19.sp),
-    doneButton = TextStyle(fontFamily = ClearSans, fontWeight = FontWeight.Bold, fontSize = 34.sp),
-    field = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 20.sp),
+    cardTitle = TextStyle(
+        fontFamily = AqumTwo,
+        fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
+        fontSize = 28.sp, lineHeight = 35.sp, textAlign = TextAlign.Center,
+    ),
+    teamLabel = TextStyle(
+        fontFamily = AqumTwo,
+        fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
+        fontSize = 32.sp,
+    ),
+    caption = TextStyle(
+        fontFamily = AqumTwo,
+        fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
+        fontSize = 20.sp,
+    ),
+    doneButton = TextStyle(
+        fontFamily = AqumTwo,
+        fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
+        fontSize = 31.sp,
+    ),
+    field = TextStyle(fontFamily = AqumTwo, fontSize = 20.sp),
 )
 
 // ───────────────────────── Язык интерфейса ─────────────────────────
