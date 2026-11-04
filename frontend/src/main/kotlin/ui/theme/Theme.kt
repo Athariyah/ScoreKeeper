@@ -65,6 +65,14 @@ class ScoreKeeperColors(
     val captionText: Color,
     val doneButtonBg: Color,
     val onDoneButton: Color,
+    // Экран матча (админка)
+    val pillBg: Color,          // фон плашек-табов, пилюль счёта и статуса
+    val pillText: Color,        // цифры на пилюлях счёта
+    val headingText: Color,     // крупный тёмно-синий текст («ВОЛЕЙБОЛ», таймер, «НАЗАД»)
+    val subText: Color,         // вторичный текст («Счёт матча»)
+    val logoPlaceholder: Color, // серый круг, когда лого не загружено
+    val previewBorder: Color,   // обводка панели предпросмотра
+    val outlineSoft: Color,     // мягкая обводка (пилюля «НАЗАД»)
 )
 
 /** Светлая тема (по умолчанию). Тёмная — DarkColors ниже. */
@@ -97,6 +105,13 @@ val LightColors = ScoreKeeperColors(
     captionText = Color.Black,
     doneButtonBg = Color(0xFF69DB7C),
     onDoneButton = Color(0xFF343F4B),
+    pillBg = Color(0xFFE5F1FD),
+    pillText = Color(0xFF465B72),
+    headingText = Color(0xFF0A2244),
+    subText = Color(0xFF5F7186),
+    logoPlaceholder = Color(0xFFDDDDDD),
+    previewBorder = Color(0xFFBBDAEE),
+    outlineSoft = Color(0xFFC9D8E8),
 )
 
 /** Тёмная тема: тот же фирменный синий и яркие овалы, но на тёмно-синем фоне. */
@@ -129,6 +144,13 @@ val DarkColors = ScoreKeeperColors(
     captionText = Color(0xFFB9C6D8),
     doneButtonBg = Color(0xFF69DB7C),
     onDoneButton = Color(0xFF343F4B),
+    pillBg = Color(0xFF1E2E47),
+    pillText = Color(0xFFC7D6EA),
+    headingText = Color(0xFFEAF2FC),
+    subText = Color(0xFF9FB4CC),
+    logoPlaceholder = Color(0xFF2A3B57),
+    previewBorder = Color(0xFF2E4A6E),
+    outlineSoft = Color(0xFF33465F),
 )
 
 // ───────────────────────── Шрифты и типографика ─────────────────────────
@@ -221,6 +243,28 @@ class AppStrings(
     val player1: String,
     val player2: String,
     val done: String,
+    // Экран матча (админка)
+    val back: String,
+    val matchScore: String,
+    val pointsTab: String,
+    val setTab: String,
+    val preview: String,
+    val displayTextBtn: String,
+    val statusNotStarted: String,
+    val statusInProgress: String,
+    val statusFinished: String,
+    val reset: String,
+    val undo: String,
+    val correction: String,
+    val startMatch: String,
+    val endMatch: String,
+    val continueMatch: String,
+    val tossTitle: String,
+    val confirm: String,
+    val display: String,
+    val enterTextTitle: String,
+    val setsLabel: String,
+    val courtSideLabel: String,
 )
 
 val RuStrings = AppStrings(
@@ -237,6 +281,27 @@ val RuStrings = AppStrings(
     player1 = "ИГРОК 1",
     player2 = "ИГРОК 2",
     done = "ГОТОВО",
+    back = "НАЗАД",
+    matchScore = "Счёт матча",
+    pointsTab = "ОЧКИ",
+    setTab = "ПАРТИЯ",
+    preview = "ПРЕДПРОСМОТР",
+    displayTextBtn = "ВЫВЕСТИ ТЕКСТ",
+    statusNotStarted = "Не начато",
+    statusInProgress = "В процессе",
+    statusFinished = "Завершено",
+    reset = "СБРОС",
+    undo = "ОТКАТ",
+    correction = "КОРРЕКТИРОВКА",
+    startMatch = "НАЧАТЬ МАТЧ",
+    endMatch = "ЗАВЕРШИТЬ МАТЧ",
+    continueMatch = "ПРОДОЛЖИТЬ МАТЧ",
+    tossTitle = "ЖЕРЕБЬЁВКА",
+    confirm = "ПОДТВЕРДИТЬ",
+    display = "ВЫВЕСТИ",
+    enterTextTitle = "ВВЕДИТЕ ТЕКСТ ДЛЯ ВЫВОДА\nЕГО НА ЭКРАН.",
+    setsLabel = "ПАРТИИ",
+    courtSideLabel = "СТОРОНА ПОЛЯ\nПОДАЮЩЕЙ КОМАНДЫ",
 )
 
 val EnStrings = AppStrings(
@@ -253,6 +318,27 @@ val EnStrings = AppStrings(
     player1 = "PLAYER 1",
     player2 = "PLAYER 2",
     done = "DONE",
+    back = "BACK",
+    matchScore = "Match score",
+    pointsTab = "POINTS",
+    setTab = "SET",
+    preview = "PREVIEW",
+    displayTextBtn = "DISPLAY TEXT",
+    statusNotStarted = "Not started",
+    statusInProgress = "In progress",
+    statusFinished = "Finished",
+    reset = "RESET",
+    undo = "UNDO",
+    correction = "CORRECTION",
+    startMatch = "START MATCH",
+    endMatch = "END MATCH",
+    continueMatch = "CONTINUE MATCH",
+    tossTitle = "TOSS",
+    confirm = "CONFIRM",
+    display = "DISPLAY",
+    enterTextTitle = "ENTER TEXT TO DISPLAY\nIT ON THE SCREEN.",
+    setsLabel = "SETS",
+    courtSideLabel = "SERVING TEAM'S\nCOURT SIDE",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings =

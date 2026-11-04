@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import org.jetbrains.skia.FilterBlurMode
@@ -53,6 +54,7 @@ import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.hypot
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import androidx.compose.ui.graphics.Canvas as GraphicsCanvas
 
@@ -203,6 +205,48 @@ private fun renderSprite(spec: OvalSpec, density: Density): OvalSprite {
     return OvalSprite(bitmap, wDp, hDp, spec.cx, spec.cy, ux, uy, mid, spec.length / 2f + PAD)
 }
 
+// «Стеклянная» версия спрайта: та же капсула, но размытая один раз при создании
+// и вчетверо меньшего разрешения. Стекло больше не делает blur на каждый кадр
+// (это была главная причина тормозов), а просто рисует готовые мягкие пятна.
+private const val GLASS_BITMAP_SCALE = 0.25f   // разрешение стеклянных спрайтов
+private const val GLASS_SIGMA = 20f            // сила размытия стекла (≈ прежний blur 34 dp), dp
+private const val GLASS_PAD = 84f              // запас под расплывание (≥ 3·sigma), dp
+
+private fun renderGlassSprite(spec: OvalSpec, density: Density): OvalSprite {
+    val c = cos(THETA).toFloat()
+    val s = sin(THETA).toFloat()
+    val boundsW = spec.length * c + spec.thickness * s
+    val boundsH = spec.length * s + spec.thickness * c
+    val wDp = boundsW + 2 * GLASS_PAD
+    val hDp = boundsH + 2 * GLASS_PAD
+    val pxPerDp = density.density * GLASS_BITMAP_SCALE
+    val wPx = ceil(wDp * pxPerDp).toInt().coerceAtLeast(1)
+    val hPx = ceil(hDp * pxPerDp).toInt().coerceAtLeast(1)
+
+    val bitmap = ImageBitmap(wPx, hPx)
+    CanvasDrawScope().draw(
+        density, LayoutDirection.Ltr, GraphicsCanvas(bitmap), Size(wPx.toFloat(), hPx.toFloat()),
+    ) {
+        scale(pxPerDp, pxPerDp, pivot = Offset.Zero) {
+            val center = Offset(wDp / 2f, hDp / 2f)
+            withTransform({ rotate(ANGLE, pivot = center) }) {
+                drawBlurredRoundRect(
+                    topLeft = Offset(center.x - spec.length / 2f, center.y - spec.thickness / 2f),
+                    size = Size(spec.length, spec.thickness),
+                    corner = spec.thickness / 2f,
+                    color = spec.color,
+                    sigma = GLASS_SIGMA,
+                )
+            }
+        }
+    }
+
+    val ux = c
+    val uy = -s
+    val mid = (960f - spec.cx) * ux + (540f - spec.cy) * uy
+    return OvalSprite(bitmap, wDp, hDp, spec.cx, spec.cy, ux, uy, mid, spec.length / 2f + GLASS_PAD)
+}
+
 // ───────────────────────── Анимация дрейфа ─────────────────────────
 
 /**
@@ -213,6 +257,7 @@ private fun renderSprite(spec: OvalSpec, density: Density): OvalSprite {
 @Stable
 class OvalsAnimation internal constructor(
     internal val sprites: List<OvalSprite>,
+    internal val glassSprites: List<OvalSprite>,
     internal val clock: LongState,
     internal val speed: Float,
     internal val viewDiagonal: Float,
@@ -237,11 +282,19 @@ fun rememberOvalsAnimation(
     LaunchedEffect(Unit) {
         val start = withFrameNanos { it }
         while (true) {
+            // Часы обновляются на КАЖДЫЙ кадр. Ранний троттлинг до ~30 fps давал рывки:
+            // шаг ~2 dp виден глазу, а на 60 Гц длительности кадров чередуются 33/50 мс.
+            // Значение читается только в фазе отрисовки Canvas (без рекомпозиций),
+            // а тяжёлого blur на каждый кадр нет — спрайты отрисованы заранее.
+            withFrameNanos { now -> clock.longValue = now - start }
         }
     }
 
     val sprites = remember(specs, density.density) { specs.map { renderSprite(it, density) } }
+    val glassSprites = remember(specs, density.density) { specs.map { renderGlassSprite(it, density) } }
     val diagonal = hypot(stage.windowWidth.value, stage.windowHeight.value)
+    return remember(sprites, glassSprites, speed, diagonal, period) {
+        OvalsAnimation(sprites, glassSprites, clock, speed, diagonal, period)
     }
 }
 
@@ -250,13 +303,25 @@ fun rememberOvalsAnimation(
  * Для фона окна это (-originX, -originY), для карточки: её позиция в макете.
  * Анимированное значение читается только на этапе отрисовки: рекомпозиций на каждый кадр нет.
  */
+/**
+ * @param glass true — рисовать заранее размытые «стеклянные» спрайты (для карточки):
+ *              мягкие цветовые пятна без blur-эффекта на каждый кадр.
+ */
 @Composable
+fun OvalsCanvas(
+    anim: OvalsAnimation,
+    designTopLeft: Offset,
+    modifier: Modifier = Modifier,
+    glass: Boolean = false,
+) {
+    val sprites = if (glass) anim.glassSprites else anim.sprites
     Canvas(modifier) {
         val d = density
         val period = anim.period.toDouble()
         val travelled = anim.clock.longValue / 1e9 * anim.speed
         val phase = ((travelled % period) + period) % period
 
+        for (sp in sprites) {
             // какие копии овала (сдвинутые на k·period) сейчас попадают в окно
             val span = anim.viewDiagonal / 2.0 + sp.halfLength
             val kMin = ceil((sp.mid - span - phase) / period).toInt()
@@ -265,6 +330,15 @@ fun rememberOvalsAnimation(
                 val delta = phase + k * period
                 val x = sp.cx + sp.ux * delta - sp.width / 2.0 - designTopLeft.x
                 val y = sp.cy + sp.uy * delta - sp.height / 2.0 - designTopLeft.y
+                // Субпиксельная позиция через translate: округление dstOffset до целых
+                // пикселей при масштабе окна ≠ 1 даёт видимые шаги и микродрожание краёв.
+                // dstSize: обычные спрайты рисуются 1:1, а стеклянные (¼ разрешения) растягиваются.
+                withTransform({ translate((x * d).toFloat(), (y * d).toFloat()) }) {
+                    drawImage(
+                        image = sp.image,
+                        dstSize = IntSize((sp.width * d).roundToInt(), (sp.height * d).roundToInt()),
+                    )
+                }
             }
         }
     }
@@ -273,6 +347,10 @@ fun rememberOvalsAnimation(
 // ───────────────────────── Стеклянная карточка ─────────────────────────
 
 /**
+ * «Матовое стекло»: внутри карточки — та же анимация овалов, но из заранее размытых
+ * спрайтов (GLASS_SIGMA), сверху полупрозрачная заливка и обводка из Figma.
+ * Живого blur-эффекта на каждый кадр нет — так заметно быстрее.
+ * Размер и позицию задаёт [modifier].
  *
  * @param designTopLeft позиция левого верхнего угла карточки в координатах макета (dp).
  */
@@ -305,6 +383,7 @@ fun GlassCard(
             }
         },
     ) {
+        OvalsCanvas(anim, designTopLeft, Modifier.matchParentSize().clip(shape), glass = true)
         Box(
             Modifier
                 .matchParentSize()

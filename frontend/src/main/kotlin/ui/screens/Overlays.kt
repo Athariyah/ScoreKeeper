@@ -87,7 +87,7 @@ private val TextStrokeColor = Color(0xFFE2EEF7)
  * внутренняя половина перекрывается заливкой). BasicText так не умеет — рисуем через Canvas.
  */
 @Composable
-private fun FigmaText(
+internal fun FigmaText(
     text: String,
     style: TextStyle,
     color: Color,
@@ -174,7 +174,7 @@ private const val BACK_ARROW_PATH = "M41.3332 28H14.6665M24.6665 18L14.6665 28L2
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun BackArrowButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun BackArrowButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val pressed by interaction.collectIsPressedAsState()
@@ -460,7 +460,7 @@ private const val GOTOVO_PATH =
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun DoneButton(
+internal fun DoneButton(
     text: String,
     usePathText: Boolean,
     onClick: () -> Unit,
