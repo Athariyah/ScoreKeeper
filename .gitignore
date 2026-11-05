@@ -42,4 +42,18 @@ desktop.ini
 *.tmp
 *.bak
 
-dist
+# Локальная готовая сборка приложения
+/ScorekeeperAppRelease/
+
+# Готовый установщик
+/installer-output/
+
+# Сборка PyInstaller
+/dist/
+/build/
+
+# Локальные ярлыки Windows
+*.lnk
+
+# Gradle Wrapper нужен для сборки проекта
+!frontend/gradle/wrapper/gradle-wrapper.jar
