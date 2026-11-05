@@ -85,8 +85,11 @@ object ApiClient {
         install(WebSockets)
     }
 
-    private const val BASE_URL = "http://127.0.0.1:8000/api/match"
-    private const val WS_URL   = "ws://127.0.0.1:8000/ws/match"
+    // The Windows launcher passes the port it selected; standalone development keeps 8000.
+    private val port = System.getenv("SCOREKEEPER_PORT")?.toIntOrNull()
+        ?.takeIf { it in 1..65535 } ?: 8000
+    private val BASE_URL = "http://127.0.0.1:$port/api/match"
+    private val WS_URL   = "ws://127.0.0.1:$port/ws/match"
 
     private fun <T> call(block: suspend () -> T, onResult: (T?) -> Unit, onError: ((String) -> Unit)? = null) {
         CoroutineScope(Dispatchers.IO).launch {
