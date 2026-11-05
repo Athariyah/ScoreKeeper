@@ -11,8 +11,10 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Density
@@ -21,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
-import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -88,24 +89,41 @@ fun ApplicationScope.ExternalScoreboardWindow(
         // Страховка: некоторые ОС игнорируют стартовую позицию — выставляем границы явно.
         LaunchedEffect(display) { window.bounds = Rectangle(b) }
 
-        // Табло занимает весь экран ТВ: масштаб подбирается по самой рамке 1129×698 (без полей под свечение).
-        Box(Modifier.fillMaxSize().background(Color(0xFF070F2B))) {
-            BoxWithConstraints(Modifier.fillMaxSize()) {
-                val fitScale = minOf(maxWidth.value / 1129f, maxHeight.value / 698f)
-                val baseDensity = LocalDensity.current
-                CompositionLocalProvider(
-                    LocalDensity provides Density(baseDensity.density * fitScale, 1f),
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF002296))
+                .clipToBounds()
+        ) {
+            // Внутренняя область табло БЕЗ голубой рамки и скруглённых углов.
+            // Если захотите чуть сильнее/слабее обрезать края — уменьшите/увеличьте эти 2 числа:
+            val visibleWidth = 1055f
+            val visibleHeight = 654f
+
+            val scaleX = maxWidth.value / visibleWidth
+            val scaleY = maxHeight.value / visibleHeight
+            val baseDensity = LocalDensity.current
+
+            CompositionLocalProvider(
+                LocalDensity provides Density(baseDensity.density * scaleY, 1f),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .requiredSize(1129.dp, 698.dp)
+                        .graphicsLayer {
+                            // Растягиваем по горизонтали до полного заполнения 16:9 экрана ТВ
+                            this.scaleX = scaleX / scaleY
+                        }
                 ) {
-                    Box(Modifier.align(Alignment.Center).requiredSize(1129.dp, 698.dp)) {
-                        AudienceScreen(
-                            match = match,
-                            logo1 = logo1,
-                            logo2 = logo2,
-                            tickerText = tickerText,
-                            courtSide = courtSide,
-                            strings = strings,
-                        )
-                    }
+                    AudienceScreen(
+                        match = match,
+                        logo1 = logo1,
+                        logo2 = logo2,
+                        tickerText = tickerText,
+                        courtSide = courtSide,
+                        strings = strings,
+                    )
                 }
             }
         }
