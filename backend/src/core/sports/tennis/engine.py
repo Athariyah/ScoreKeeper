@@ -15,7 +15,7 @@ class TennisEngine(AbstractMatchEngine):
         self.games = [0, 0]
         self.sets_won = [0, 0]
 
-    def start_match(self, player1: str, player2: str, server_index: int) -> None:
+    def start_match(self, player1: str, player2: str, server_index: int, config: dict[str, Any] | None = None) -> None:
         self.players = (player1, player2)
         self.status = MatchStatus.IN_PROGRESS
         self.current_server = server_index

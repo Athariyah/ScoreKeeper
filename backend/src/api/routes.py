@@ -16,6 +16,7 @@ class StartMatchRequest(BaseModel):
     player1 : str
     player2 : str
     server_index: int
+    config: dict[str, Any] | None = None
     
 class AddPointRequest(BaseModel):
     player_index: int
@@ -34,7 +35,7 @@ async def start_match(request: StartMatchRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
-    engine.start_match(request.player1, request.player2, request.server_index)
+    engine.start_match(request.player1, request.player2, request.server_index, request.config)
     _current_engine = engine
     
     score = _current_engine.get_score()
