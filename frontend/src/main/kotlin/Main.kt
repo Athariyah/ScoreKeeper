@@ -1131,6 +1131,8 @@ private fun CorrectionDialogOverlay(
     var t1Sets by remember { mutableStateOf(match.sets1.toString()) }
     var t2Sets by remember { mutableStateOf(match.sets2.toString()) }
     var serverSel by remember { mutableStateOf(match.server) }
+    // Keep side edits local until Done is confirmed; backing out must leave the match unchanged.
+    var selectedCourtSide by remember(courtSide) { mutableStateOf(courtSide) }
 
     MatchDialogScaffold(cardHeight = 598.dp, onBack = onBack) {
         FigmaText(
@@ -1188,14 +1190,14 @@ private fun CorrectionDialogOverlay(
             Modifier.offset(143.dp, 403.dp), TextAlign.Center, 500.dp,
         )
         SideArrow(
-            toLeft = true, selected = courtSide == "L",
-            onClick = { onCourtSideChange("L") },
+            toLeft = true, selected = selectedCourtSide == "L",
+            onClick = { selectedCourtSide = "L" },
             modifier = Modifier.offset(200.dp, 446.dp),
         )
-        LrBadge(courtSide, Modifier.offset(373.dp, 454.dp))
+        LrBadge(selectedCourtSide, Modifier.offset(373.dp, 454.dp))
         SideArrow(
-            toLeft = false, selected = courtSide == "R",
-            onClick = { onCourtSideChange("R") },
+            toLeft = false, selected = selectedCourtSide == "R",
+            onClick = { selectedCourtSide = "R" },
             modifier = Modifier.offset(422.dp, 446.dp),
         )
 
@@ -1203,6 +1205,7 @@ private fun CorrectionDialogOverlay(
             text = strings.done,
             usePathText = usePathText,
             onClick = {
+                onCourtSideChange(selectedCourtSide)
                 onSubmit(
                     t1Score.toIntOrNull() ?: 0,
                     t2Score.toIntOrNull() ?: 0,
