@@ -1741,6 +1741,19 @@ fun AudienceScreen(
     val panelLeft = remember { PathParser().parsePathString(PANEL_LEFT).toPath() }
     val panelRight = remember { PathParser().parsePathString(PANEL_RIGHT).toPath() }
 
+    // In the admin preview, a right-side serving team appears on the opposite side of
+    // the audience board. The real external display keeps its normal team ordering.
+    val swapPreviewSides = preview && courtSide == "R"
+    val leftTeam = if (swapPreviewSides) live.team2 else live.team1
+    val rightTeam = if (swapPreviewSides) live.team1 else live.team2
+    val leftSets = if (swapPreviewSides) live.sets2 else live.sets1
+    val rightSets = if (swapPreviewSides) live.sets1 else live.sets2
+    val leftScore = if (swapPreviewSides) live.score2 else live.score1
+    val rightScore = if (swapPreviewSides) live.score1 else live.score2
+    val leftLogo = if (swapPreviewSides) logo2 else logo1
+    val rightLogo = if (swapPreviewSides) logo1 else logo2
+    val visibleServer = if (swapPreviewSides) 1 - live.server else live.server
+
     Box(modifier = modifier.size(width = 1129.dp, height = 698.dp)) {
         Canvas(Modifier.fillMaxSize()) {
             val u = 1.dp.toPx()
@@ -1783,23 +1796,24 @@ fun AudienceScreen(
                     // точки-двоеточие между партиями
                     drawCircle(Color.White, 15f, Offset(565f, 285f))
                     drawCircle(Color.White, 15f, Offset(565f, 350f))
-                    // бейдж L/R: кольцо #848484; L — на красном (#C31332), R — на тёмно-синем (#18305F);
-                    // при смене стороны в корректировке буквы (с цветами) меняются местами.
-                    val bc = Offset(564f, 462f)
-                    val swapped = courtSide == "R"
-                    drawCircle(Color(0xFF848484), 37f, bc)
-                    drawArc(
-                        if (swapped) Color(0xFF18305F) else Color(0xFFC31332),
-                        startAngle = 90f, sweepAngle = 180f, useCenter = true,
-                        topLeft = Offset(bc.x - 32.3f, bc.y - 32.3f), size = Size(64.6f, 64.6f),
-                    )
-                    drawArc(
-                        if (swapped) Color(0xFFC31332) else Color(0xFF18305F),
-                        startAngle = -90f, sweepAngle = 180f, useCenter = true,
-                        topLeft = Offset(bc.x - 32.3f, bc.y - 32.3f), size = Size(64.6f, 64.6f),
-                    )
-                    drawLine(Color.White, Offset(564f, 436f), Offset(564f, 486f), strokeWidth = 2f)
-                    drawCircle(Color(0xFF070F2B), 36f, bc, style = Stroke(2f))
+                    // The side-direction badge is part of the actual audience board, not its preview.
+                    if (!preview) {
+                        val bc = Offset(564f, 462f)
+                        val swapped = courtSide == "R"
+                        drawCircle(Color(0xFF848484), 37f, bc)
+                        drawArc(
+                            if (swapped) Color(0xFF18305F) else Color(0xFFC31332),
+                            startAngle = 90f, sweepAngle = 180f, useCenter = true,
+                            topLeft = Offset(bc.x - 32.3f, bc.y - 32.3f), size = Size(64.6f, 64.6f),
+                        )
+                        drawArc(
+                            if (swapped) Color(0xFFC31332) else Color(0xFF18305F),
+                            startAngle = -90f, sweepAngle = 180f, useCenter = true,
+                            topLeft = Offset(bc.x - 32.3f, bc.y - 32.3f), size = Size(64.6f, 64.6f),
+                        )
+                        drawLine(Color.White, Offset(564f, 436f), Offset(564f, 486f), strokeWidth = 2f)
+                        drawCircle(Color(0xFF070F2B), 36f, bc, style = Stroke(2f))
+                    }
                 }
                 // рамка: градиентная обводка 14
                 drawRoundRect(
@@ -1833,14 +1847,14 @@ fun AudienceScreen(
         )
 
         // Логотипы команд поверх серых дисков
-        if (logo1 != null) {
+        if (leftLogo != null) {
             Box(Modifier.offset(253.dp, 123.dp).size(150.dp).clip(CircleShape)) {
-                Image(bitmap = logo1, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                Image(bitmap = leftLogo, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
         }
-        if (logo2 != null) {
+        if (rightLogo != null) {
             Box(Modifier.offset(727.dp, 123.dp).size(150.dp).clip(CircleShape)) {
-                Image(bitmap = logo2, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                Image(bitmap = rightLogo, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
         }
         // Рисуем индикатор после логотипов: если оставить его в Canvas-фоне, загруженные
@@ -1848,30 +1862,32 @@ fun AudienceScreen(
         if (live.status != "NOT_STARTED") {
             ServeGlowDot(
                 Modifier.offset(
-                    if (live.server == 0) 351.dp else 825.dp,
+                    if (visibleServer == 0) 351.dp else 825.dp,
                     237.dp,
                 ),
             )
         }
 
-        // Левая колонка
-        BoardText(live.team1.uppercase(), 328f, 298f, 35.sp, FontWeight.Normal)
-        BoardText("${live.sets1}", 328f, 370f, 62.sp, FontWeight.Bold)
+        // Team and score columns are swapped only in the admin preview when the serving
+        // team is assigned to the right-hand side.
+        BoardText(leftTeam.uppercase(), 328f, 298f, 35.sp, FontWeight.Normal)
+        BoardText("$leftSets", 328f, 370f, 62.sp, FontWeight.Bold)
         BoardText(strings.setsLabel, 328f, 419f, 22.sp, FontWeight.Normal)
-        BoardText("${live.score1}", 328f, 506f, 124.sp, FontWeight.Bold)
+        BoardText("$leftScore", 328f, 506f, 124.sp, FontWeight.Bold)
         BoardText(strings.pointsTab, 328f, 591f, 36.sp, FontWeight.Normal)
 
-        // Правая колонка
-        BoardText(live.team2.uppercase(), 802f, 298f, 35.sp, FontWeight.Normal)
-        BoardText("${live.sets2}", 802f, 370f, 62.sp, FontWeight.Bold)
+        BoardText(rightTeam.uppercase(), 802f, 298f, 35.sp, FontWeight.Normal)
+        BoardText("$rightSets", 802f, 370f, 62.sp, FontWeight.Bold)
         BoardText(strings.setsLabel, 802f, 419f, 22.sp, FontWeight.Normal)
-        BoardText("${live.score2}", 802f, 506f, 124.sp, FontWeight.Bold)
+        BoardText("$rightScore", 802f, 506f, 124.sp, FontWeight.Bold)
         BoardText(strings.pointsTab, 802f, 591f, 36.sp, FontWeight.Normal)
 
-        // Центр: «ПАРТИЯ N» и буквы бейджа (меняются местами со стороной подачи)
+        // The side-direction badge is hidden in the admin preview.
         BoardText("${strings.setTab} ${live.currentSet}", 564f, 600f, 35.sp, FontWeight.Normal, width = 211f)
-        BoardText(if (courtSide == "R") "R" else "L", 549.5f, 462f, 35.sp, FontWeight.Bold, width = 34f)
-        BoardText(if (courtSide == "R") "L" else "R", 579.5f, 462f, 35.sp, FontWeight.Bold, width = 34f)
+        if (!preview) {
+            BoardText(if (courtSide == "R") "R" else "L", 549.5f, 462f, 35.sp, FontWeight.Bold, width = 34f)
+            BoardText(if (courtSide == "R") "L" else "R", 579.5f, 462f, 35.sp, FontWeight.Bold, width = 34f)
+        }
 
         // Пилюли предпросмотра (только в панели админки, по SVG «Экран предпросмотра»)
         if (preview) {
