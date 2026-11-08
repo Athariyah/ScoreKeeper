@@ -108,6 +108,7 @@ data class MatchState(
     val status: String = "NOT_STARTED",
     val sport: String = "volleyball",
     val tennisPointsDisplay: List<String>? = null,
+    val tennisPoints: List<Int>? = null,
     val tennisGames: List<Int>? = null,
     val server: Int = 0,
     val winner: Int? = null
@@ -129,6 +130,7 @@ data class MatchState(
                 status = r.status,
                 sport = r.sport,
                 tennisPointsDisplay = r.pointsDisplay,
+                tennisPoints = r.points,
                 tennisGames = r.games,
                 server = r.server,
                 winner = r.winner
@@ -1263,6 +1265,37 @@ fun VoleyballScreen(
 
     val startMatchAction = { showTossDialog = true }
     val endMatchAction = { ApiClient.forceEnd(onResult = apply, onError = { errorMsg = it }) }
+    // Reopen the finished match by changing only its status. Keep the current set/game,
+    // points, serving team and team names instead of calling /start (which resets everything).
+    val continueMatchAction = {
+        if (sport == "tennis") {
+            ApiClient.setScore(
+                TennisSetScore(
+                    points = match.tennisPoints ?: listOf(0, 0),
+                    games = match.tennisGames ?: listOf(match.score1, match.score2),
+                    setsWon = listOf(match.sets1, match.sets2),
+                    server = match.server,
+                    status = "IN_PROGRESS",
+                    winner = null,
+                ),
+                onResult = apply,
+                onError = { errorMsg = it },
+            )
+        } else {
+            ApiClient.setScore(
+                VolleyballSetScore(
+                    sets = listOf(match.score1, match.score2),
+                    setsWon = listOf(match.sets1, match.sets2),
+                    currentSet = match.currentSet,
+                    server = match.server,
+                    status = "IN_PROGRESS",
+                    winner = null,
+                ),
+                onResult = apply,
+                onError = { errorMsg = it },
+            )
+        }
+    }
 
     ScoreKeeperTheme(colors = colorsFor(darkTheme), strings = stringsFor(language)) {
         val colors = ScoreKeeperTheme.colors
@@ -1495,13 +1528,18 @@ fun VoleyballScreen(
                                 )
                             }
                         },
-                        modifier = Modifier.offset(1322.dp, 685.dp).size(223.dp, 93.dp),
+                        modifier = Modifier.offset(
+                            if (match.status == "FINISHED") 1450.dp else 1322.dp,
+                            685.dp,
+                        ).size(223.dp, 93.dp),
                     ) { ResetIcon(colors.headingBlue) }
-                    OutlineActionButton(
-                        text = strings.undo,
-                        onClick = { ApiClient.removePoint(apply) { errorMsg = it } },
-                        modifier = Modifier.offset(1581.dp, 685.dp).size(223.dp, 93.dp),
-                    ) { UndoIcon(colors.headingBlue) }
+                    if (match.status != "FINISHED") {
+                        OutlineActionButton(
+                            text = strings.undo,
+                            onClick = { ApiClient.removePoint(apply) { errorMsg = it } },
+                            modifier = Modifier.offset(1581.dp, 685.dp).size(223.dp, 93.dp),
+                        ) { UndoIcon(colors.headingBlue) }
+                    }
                     OutlineActionButton(
                         text = strings.correction,
                         onClick = { showCorrectionDialog = true },
@@ -1519,7 +1557,11 @@ fun VoleyballScreen(
                         "IN_PROGRESS" -> 1
                         else -> 2
                     },
-                    onClick = { if (match.status == "IN_PROGRESS") endMatchAction() else startMatchAction() },
+                    onClick = when (match.status) {
+                        "IN_PROGRESS" -> endMatchAction
+                        "FINISHED" -> continueMatchAction
+                        else -> startMatchAction
+                    },
                     modifier = Modifier.offset(1322.dp, 914.dp).size(498.dp, 114.dp),
                 )
 
@@ -1755,13 +1797,6 @@ fun AudienceScreen(
                     )
                     drawLine(Color.White, Offset(564f, 436f), Offset(564f, 486f), strokeWidth = 2f)
                     drawCircle(Color(0xFF070F2B), 36f, bc, style = Stroke(2f))
-                    // точка подачи (на ободе диска подающей команды) — только когда матч начат
-                    if (live.status != "NOT_STARTED") {
-                        drawCircle(
-                            Color(0xFFFFBF00), 15f,
-                            if (live.server == 0) Offset(371f, 257f) else Offset(845f, 257f),
-                        )
-                    }
                 }
                 // рамка: градиентная обводка 14
                 drawRoundRect(
@@ -1804,6 +1839,16 @@ fun AudienceScreen(
             Box(Modifier.offset(727.dp, 123.dp).size(150.dp).clip(CircleShape)) {
                 Image(bitmap = logo2, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
+        }
+        // Рисуем индикатор после логотипов: если оставить его в Canvas-фоне, загруженные
+        // изображения перекроют его, тогда как заглушки (нарисованные Canvas) — нет.
+        if (live.status != "NOT_STARTED") {
+            ServeGlowDot(
+                Modifier.offset(
+                    if (live.server == 0) 351.dp else 825.dp,
+                    237.dp,
+                ),
+            )
         }
 
         // Левая колонка
@@ -1860,51 +1905,7 @@ fun AudienceScreen(
             }
         }
 
-        // Баннер победителя поверх затемнённого табло / пилюля сообщения сверху
-        val winnerName = when (live.winner) {
-            0 -> live.team1
-            1 -> live.team2
-            else -> null
-        }
-        if (live.finished && winnerName != null) {
-            Box(
-                Modifier.offset(7.dp, 7.dp).size(1115.dp, 684.dp)
-                    .clip(RoundedCornerShape(40.dp))
-                    .background(Color.Black.copy(alpha = 0.52f)),
-            )
-            Box(
-                Modifier.offset(294.dp, 246.dp).size(545.dp, 208.dp)
-                    .clip(RoundedCornerShape(45.dp))
-                    .background(Color(0xFF162C5A)),
-            ) {
-                Box(Modifier.offset(0.dp, 30.dp).size(545.dp, 80.dp), contentAlignment = Alignment.Center) {
-                    Text(
-                        strings.winnerLabel,
-                        color = Color(0xFFFFBF00),
-                        fontFamily = ArialFamily,
-                        fontSize = 64.sp,
-                        fontWeight = FontWeight.Bold,
-                        lineHeight = 64.sp,
-                        maxLines = 1,
-                        softWrap = false,
-                    )
-                }
-                Box(Modifier.offset(0.dp, 130.dp).size(545.dp, 50.dp), contentAlignment = Alignment.Center) {
-                    Text(
-                        winnerName.uppercase(),
-                        color = Color.White,
-                        fontFamily = ArialFamily,
-                        fontSize = 42.sp,
-                        fontWeight = FontWeight.Normal,
-                        lineHeight = 42.sp,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                    )
-                }
-            }
-        } else if (shownText.isNotBlank()) {
+        if (shownText.isNotBlank()) {
             // Пилюля масштабируется под длину текста.
             Box(
                 Modifier.align(Alignment.TopCenter).offset(y = 96.dp)
