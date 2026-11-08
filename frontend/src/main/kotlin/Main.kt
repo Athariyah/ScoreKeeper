@@ -262,9 +262,12 @@ private fun runApp() = application {
                             sport = if (tennis) "tennis" else "volleyball",
                         )
                         showSetupDialog = false
-                        currentScreen = selectedGame
-                        showVolleyballSettings = selectedGame == Screen.valeball
-                        splashKey++
+                        val isVolleyball = selectedGame == Screen.valeball
+                        // Volleyball rules are configured over the home screen, immediately after team setup.
+                        // Enter the match screen only after the user confirms those settings.
+                        currentScreen = if (isVolleyball) Screen.menu else selectedGame
+                        showVolleyballSettings = isVolleyball
+                        if (!isVolleyball) splashKey++
                     },
                 )
             }
@@ -288,6 +291,8 @@ private fun runApp() = application {
                     onConfirm = { selected ->
                         volleyballSettings = selected
                         showVolleyballSettings = false
+                        currentScreen = selectedGame
+                        splashKey++
                     },
                 )
             }
@@ -1033,6 +1038,15 @@ private fun MatchDialogScaffold(
             if (outerGlass) {
                 Box(
                     Modifier.align(Alignment.Center).offset(y = 24.dp).size(1002.dp, 802.dp)
+                        .drawBehind {
+                            drawBlurredRoundRect(
+                                topLeft = Offset.Zero,
+                                size = size,
+                                corner = 40.dp.toPx(),
+                                color = Color.Black.copy(alpha = 0.20f),
+                                sigma = 35.dp.toPx(),
+                            )
+                        }
                         .clip(RoundedCornerShape(40.dp))
                         .background(colors.glassFill)
                         .border(1.dp, colors.glassBorder, RoundedCornerShape(40.dp)),
@@ -1101,7 +1115,7 @@ private fun VolleyballSettingsDialog(
             )
         }
 
-        MatchDialogScaffold(cardHeight = 610.dp, onBack = onBack, outerGlass = true) {
+        MatchDialogScaffold(cardHeight = 612.dp, onBack = onBack, outerGlass = true) {
             FigmaText(
                 if (russian) "НАСТРОЙ СВОЙ МАТЧ" else "SET UP YOUR MATCH",
                 type.cardTitle.copy(fontSize = 30.sp, lineHeight = 36.sp),
@@ -1117,7 +1131,8 @@ private fun VolleyballSettingsDialog(
             )
             Row(
                 Modifier.offset(197.dp, 116.dp).size(400.dp, 58.dp)
-                    .clip(RoundedCornerShape(16.dp)).background(Color(0xFF59646E))
+                    .clip(RoundedCornerShape(18.dp)).background(Color(0xFF59646E))
+                    .border(3.dp, Color(0xFFE3F0F7), RoundedCornerShape(18.dp))
                     .padding(5.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1162,7 +1177,8 @@ private fun VolleyballSettingsDialog(
             )
             Row(
                 Modifier.offset(252.dp, 222.dp).size(290.dp, 58.dp)
-                    .clip(RoundedCornerShape(16.dp)).background(Color(0xFF59646E))
+                    .clip(RoundedCornerShape(18.dp)).background(Color(0xFF59646E))
+                    .border(3.dp, Color(0xFFE3F0F7), RoundedCornerShape(18.dp))
                     .padding(5.dp),
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically,
