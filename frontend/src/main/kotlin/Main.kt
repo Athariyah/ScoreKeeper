@@ -96,6 +96,31 @@ fun formatTime(totalSeconds: Int): String {
 // ============ ЭКРАНЫ ============
 enum class Screen { menu, tennis, valeball }
 
+enum class VolleyballPreset { SHORT, LONG, CUSTOM }
+
+data class VolleyballMatchSettings(
+    val preset: VolleyballPreset = VolleyballPreset.CUSTOM,
+    val setCount: Int = 3,
+    /** Goals for sets 1–4 and the deciding set; sets not visible in 3-set mode are retained. */
+    val setPoints: List<Int> = listOf(15, 25, 15, 25, 15),
+) {
+    fun toApiConfig(): com.example.VolleyballMatchConfig = com.example.VolleyballMatchConfig(
+        setsToWin = setCount / 2 + 1,
+        // The backend expects five entries. For best-of-three, the third entry is the deciding set.
+        setPoints = if (setCount == 3) {
+            listOf(setPoints[0], setPoints[1], setPoints[2], setPoints[2], setPoints[2])
+        } else {
+            setPoints.take(5)
+        },
+    )
+}
+
+private fun volleyballPresetFor(setCount: Int, points: List<Int>): VolleyballPreset = when {
+    setCount == 3 && points.take(3) == listOf(15, 15, 15) -> VolleyballPreset.SHORT
+    setCount == 5 && points.take(5) == listOf(25, 25, 25, 25, 15) -> VolleyballPreset.LONG
+    else -> VolleyballPreset.CUSTOM
+}
+
 data class MatchState(
     val team1: String = "КОМАНДА 1",
     val team2: String = "КОМАНДА 2",
@@ -155,6 +180,8 @@ private fun runApp() = application {
     var gameName2 by remember { mutableStateOf("") }
 
     var match by remember { mutableStateOf(MatchState()) }
+    var volleyballSettings by remember { mutableStateOf(VolleyballMatchSettings()) }
+    var showVolleyballSettings by remember { mutableStateOf(false) }
     var courtSide by remember { mutableStateOf("L") } // сторона поля подающей команды (общая для админки и табло)
     // Внешний экран (ТВ по HDMI): табло открывается само, пока открыт экран счёта игры.
     val externalDisplay by rememberExternalDisplay()
@@ -201,6 +228,7 @@ private fun runApp() = application {
                     onBack = { currentScreen = Screen.menu; splashKey++ },
                     name1 = gameName1, name2 = gameName2, logo1 = gameLogo1, logo2 = gameLogo2,
                     match = match, onMatchUpdate = { match = it },
+                    volleyballSettings = volleyballSettings,
                     tickerText = tickerText, onTickerUpdate = { tickerText = it }, // 👈 ПЕРЕДАЕМ ТЕКСТ
                     darkTheme = darkTheme,
                     language = language,
@@ -233,7 +261,10 @@ private fun runApp() = application {
                             team2 = name2.ifBlank { if (tennis) st.player2 else st.team2 },
                             sport = if (tennis) "tennis" else "volleyball",
                         )
-                        showSetupDialog = false; currentScreen = selectedGame; splashKey++
+                        showSetupDialog = false
+                        currentScreen = selectedGame
+                        showVolleyballSettings = selectedGame == Screen.valeball
+                        splashKey++
                     },
                 )
             }
@@ -245,6 +276,19 @@ private fun runApp() = application {
                     language = language,
                     onLanguageChange = { language = it },
                     onBack = { showSettings = false },
+                )
+            }
+
+            if (showVolleyballSettings) {
+                VolleyballSettingsDialog(
+                    settings = volleyballSettings,
+                    darkTheme = darkTheme,
+                    language = language,
+                    onBack = { showVolleyballSettings = false },
+                    onConfirm = { selected ->
+                        volleyballSettings = selected
+                        showVolleyballSettings = false
+                    },
                 )
             }
 
@@ -971,6 +1015,7 @@ private fun NumPillField(
 private fun MatchDialogScaffold(
     cardHeight: Dp,
     onBack: () -> Unit,
+    outerGlass: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val colors = ScoreKeeperTheme.colors
@@ -985,6 +1030,14 @@ private fun MatchDialogScaffold(
             ) { /* клики по затемнению не проходят в экран */ },
     ) {
         Box(Modifier.align(Alignment.Center).requiredSize(1920.dp, 1080.dp)) {
+            if (outerGlass) {
+                Box(
+                    Modifier.align(Alignment.Center).offset(y = 24.dp).size(1002.dp, 802.dp)
+                        .clip(RoundedCornerShape(40.dp))
+                        .background(colors.glassFill)
+                        .border(1.dp, colors.glassBorder, RoundedCornerShape(40.dp)),
+                )
+            }
             Box(
                 Modifier.align(Alignment.Center).size(794.dp, cardHeight)
                     .graphicsLayer {
@@ -1014,6 +1067,233 @@ private fun MatchDialogScaffold(
 }
 
 // ───────────────────────── Диалоги ─────────────────────────
+
+@Composable
+private fun VolleyballSettingsDialog(
+    settings: VolleyballMatchSettings,
+    darkTheme: Boolean,
+    language: AppLanguage,
+    onBack: () -> Unit,
+    onConfirm: (VolleyballMatchSettings) -> Unit,
+) {
+    ScoreKeeperTheme(colors = colorsFor(darkTheme), strings = stringsFor(language)) {
+        val colors = ScoreKeeperTheme.colors
+        val type = ScoreKeeperTheme.typography
+        val strings = ScoreKeeperTheme.strings
+        var draft by remember(settings) { mutableStateOf(settings) }
+        val russian = language == AppLanguage.RU
+
+        fun changeSetCount(count: Int) {
+            val points = draft.setPoints.toMutableList()
+            draft = draft.copy(
+                preset = volleyballPresetFor(count, points),
+                setCount = count,
+                setPoints = points,
+            )
+        }
+
+        fun changeSetPoints(index: Int, value: Int) {
+            val points = draft.setPoints.toMutableList()
+            points[index] = value
+            draft = draft.copy(
+                preset = volleyballPresetFor(draft.setCount, points),
+                setPoints = points,
+            )
+        }
+
+        MatchDialogScaffold(cardHeight = 610.dp, onBack = onBack, outerGlass = true) {
+            FigmaText(
+                if (russian) "НАСТРОЙ СВОЙ МАТЧ" else "SET UP YOUR MATCH",
+                type.cardTitle.copy(fontSize = 30.sp, lineHeight = 36.sp),
+                colors.headingBlue,
+                Modifier.offset(0.dp, 27.dp), TextAlign.Center, 794.dp,
+            )
+
+            FigmaText(
+                if (russian) "ПРЕСЕТЫ" else "PRESETS",
+                type.teamLabel.copy(fontSize = 22.sp, lineHeight = 26.sp),
+                colors.headingBlue,
+                Modifier.offset(0.dp, 78.dp), TextAlign.Center, 794.dp,
+            )
+            Row(
+                Modifier.offset(197.dp, 116.dp).size(400.dp, 58.dp)
+                    .clip(RoundedCornerShape(16.dp)).background(Color(0xFF59646E))
+                    .padding(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MatchSettingsSegment(
+                    if (russian) "КОРОТКАЯ\nИГРА" else "SHORT\nGAME",
+                    selected = draft.preset == VolleyballPreset.SHORT,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    onClick = {
+                        draft = VolleyballMatchSettings(
+                            preset = VolleyballPreset.SHORT,
+                            setCount = 3,
+                            setPoints = listOf(15, 15, 15, 25, 15),
+                        )
+                    },
+                )
+                MatchSettingsSegment(
+                    if (russian) "ДЛИННАЯ\nИГРА" else "LONG\nGAME",
+                    selected = draft.preset == VolleyballPreset.LONG,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    onClick = {
+                        draft = VolleyballMatchSettings(
+                            preset = VolleyballPreset.LONG,
+                            setCount = 5,
+                            setPoints = listOf(25, 25, 25, 25, 15),
+                        )
+                    },
+                )
+                MatchSettingsSegment(
+                    if (russian) "СВОЯ\nИГРА" else "CUSTOM\nGAME",
+                    selected = draft.preset == VolleyballPreset.CUSTOM,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    onClick = { draft = draft.copy(preset = VolleyballPreset.CUSTOM) },
+                )
+            }
+
+            FigmaText(
+                if (russian) "КОЛИЧЕСТВО ПАРТИЙ" else "NUMBER OF SETS",
+                type.teamLabel.copy(fontSize = 22.sp, lineHeight = 26.sp),
+                colors.headingBlue,
+                Modifier.offset(0.dp, 181.dp), TextAlign.Center, 794.dp,
+            )
+            Row(
+                Modifier.offset(252.dp, 222.dp).size(290.dp, 58.dp)
+                    .clip(RoundedCornerShape(16.dp)).background(Color(0xFF59646E))
+                    .padding(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MatchSettingsSegment(
+                    if (russian) "3 ПАРТИИ" else "3 SETS",
+                    selected = draft.setCount == 3,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    onClick = { changeSetCount(3) },
+                )
+                MatchSettingsSegment(
+                    if (russian) "5 ПАРТИЙ" else "5 SETS",
+                    selected = draft.setCount == 5,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    onClick = { changeSetCount(5) },
+                )
+            }
+
+            FigmaText(
+                if (russian) "КОЛИЧЕСТВО ОЧКОВ В КАЖДОЙ ПАРТИИ" else "POINTS IN EACH SET",
+                type.teamLabel.copy(fontSize = 22.sp, lineHeight = 26.sp),
+                colors.headingBlue,
+                Modifier.offset(0.dp, 294.dp), TextAlign.Center, 794.dp,
+            )
+            Row(
+                Modifier.offset(164.dp, 326.dp).size(466.dp, 175.dp)
+                    .clip(RoundedCornerShape(19.dp)).background(Color(0xFF56616B))
+                    .border(4.dp, Color(0xFFDCEAF2), RoundedCornerShape(19.dp))
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val visibleSetIndexes = if (draft.setCount == 3) listOf(0, 1, 2) else listOf(0, 1, 2, 3, 4)
+                visibleSetIndexes.forEach { pointIndex ->
+                    MatchSetPointsColumn(
+                        label = if (pointIndex == draft.setCount - 1) { if (russian) "ТБ" else "TB" }
+                            else "${pointIndex + 1}",
+                        selectedPoints = draft.setPoints[pointIndex],
+                        modifier = Modifier.width(68.dp),
+                        onSelect = { value -> changeSetPoints(pointIndex, value) },
+                    )
+                }
+            }
+
+            DoneButton(
+                text = strings.done,
+                usePathText = language == AppLanguage.RU,
+                onClick = { onConfirm(draft) },
+                modifier = Modifier.offset(308.dp, 524.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun MatchSettingsSegment(
+    text: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val type = ScoreKeeperTheme.typography
+    Box(
+        modifier.clip(RoundedCornerShape(11.dp))
+            .background(if (selected) Color.White else Color(0xFFD5D5D5))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        BasicText(
+            text,
+            style = type.teamLabel.copy(
+                fontSize = 18.sp,
+                lineHeight = 20.sp,
+                color = if (selected) Color(0xFF2070F5) else Color(0xFF74C0FC),
+                textAlign = TextAlign.Center,
+            ),
+            maxLines = 2,
+            softWrap = false,
+        )
+    }
+}
+
+@Composable
+private fun MatchSetPointsColumn(
+    label: String,
+    selectedPoints: Int,
+    modifier: Modifier = Modifier,
+    onSelect: (Int) -> Unit,
+) {
+    val type = ScoreKeeperTheme.typography
+    Column(
+        modifier.height(142.dp)
+            .clip(RoundedCornerShape(17.dp))
+            .background(Color(0xFF56616B))
+            .border(4.dp, Color(0xFFDCEAF2), RoundedCornerShape(17.dp))
+            .padding(3.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Box(
+            Modifier.fillMaxWidth().height(29.dp)
+                .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                .background(Color.White),
+            contentAlignment = Alignment.Center,
+        ) {
+            BasicText(
+                label,
+                style = type.teamLabel.copy(fontSize = 23.sp, color = Color(0xFF2070F5)),
+                maxLines = 1,
+            )
+        }
+        listOf(15, 25).forEach { value ->
+            Box(
+                Modifier.fillMaxWidth().weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (selectedPoints == value) Color.White else Color(0xFFD5D5D5))
+                    .clickable { onSelect(value) },
+                contentAlignment = Alignment.Center,
+            ) {
+                BasicText(
+                    value.toString(),
+                    style = type.teamLabel.copy(
+                        fontSize = 21.sp,
+                        color = if (selectedPoints == value) Color(0xFF2070F5) else Color(0xFF74C0FC),
+                    ),
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun TossDialogOverlay(
@@ -1231,6 +1511,7 @@ fun VoleyballScreen(
     logo2: ImageBitmap?,
     match: MatchState,
     onMatchUpdate: (MatchState) -> Unit,
+    volleyballSettings: VolleyballMatchSettings,
     tickerText: String,
     onTickerUpdate: (String) -> Unit,
     darkTheme: Boolean,
@@ -1592,6 +1873,7 @@ fun VoleyballScreen(
                             name1.ifBlank { defaultName1 },
                             name2.ifBlank { defaultName2 },
                             server,
+                            config = if (isTennis) null else volleyballSettings.toApiConfig(),
                             onResult = { r ->
                                 if (r != null) {
                                     secondsElapsed = 0
