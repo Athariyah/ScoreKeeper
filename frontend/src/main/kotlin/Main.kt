@@ -2117,8 +2117,12 @@ fun VoleyballScreen(
                 )
                 SettingsButton(onClick = onSettings, modifier = Modifier.offset(1536.dp, 27.dp))
                 BackPill(strings.back, {
-                    showExitConfirmationDialog = true
-                    closeMatchError = null
+                    if (match.status == "NOT_STARTED") {
+                        onBack()
+                    } else {
+                        showExitConfirmationDialog = true
+                        closeMatchError = null
+                    }
                 }, Modifier.offset(1634.dp, 28.dp))
 
                 // ── Заголовок вида спорта ──
