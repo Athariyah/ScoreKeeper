@@ -26,6 +26,7 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import ui.theme.AppLanguage
+import ui.theme.ScoreKeeperTheme
 
 // ───────────────────────── Переключатели из Figma (ваши SVG) ─────────────────────────
 //
@@ -35,11 +36,10 @@ import ui.theme.AppLanguage
 //  • язык: белая плашка выбора (сверху — РУ, снизу — EN), буквы #2070F5 / #BCBCBC.
 // Ручка и плашка не «прыгают», а плавно едут на пружине, иконки и цвета перетекают.
 
-private val SwitchFrame = Color(0xFFE2EEF7)
-private val SwitchTrack = Color(0xFF535E66)
+// Цвета берём из темы: на тёмной карточке светлая рамка #E2EEF7 выглядела бы «дыркой».
 private val SwitchIcon = Color(0xFFFFD95D)
-private val LangSelected = Color(0xFF2070F5)
 private val LangUnselected = Color(0xFFBCBCBC)
+private val LangUnselectedDark = Color(0xFF6E93B8)
 
 private fun mix(a: Float, b: Float, t: Float): Float = a + (b - a) * t
 
@@ -79,6 +79,7 @@ private const val EN_PATH =
 fun ThemeSwitch(dark: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     val sunPath = remember { PathParser().parsePathString(SUN_PATH).toPath() }
     val moonPath = remember { PathParser().parsePathString(MOON_PATH).toPath() }
+    val colors = ScoreKeeperTheme.colors
     val t by animateFloatAsState(
         targetValue = if (dark) 0f else 1f,
         animationSpec = spring(dampingRatio = 0.75f, stiffness = 400f),
@@ -97,8 +98,8 @@ fun ThemeSwitch(dark: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifi
     ) {
         val s = size.width / 94f
         withTransform({ scale(s, s, Offset.Zero) }) {
-            drawRoundRect(SwitchFrame, Offset.Zero, Size(94f, 50f), CornerRadius(25f))
-            drawRoundRect(SwitchTrack, Offset(4f, 4f), Size(86f, 42f), CornerRadius(21f))
+            drawRoundRect(colors.cardBorder, Offset.Zero, Size(94f, 50f), CornerRadius(25f))
+            drawRoundRect(colors.fieldBg, Offset(4f, 4f), Size(86f, 42f), CornerRadius(21f))
             val cx = mix(28f, 66f, t)
             drawCircle(lerp(Color.Black, Color.White, t), radius = 18f, center = Offset(cx, 25f))
             if (t < 0.98f) {
@@ -128,6 +129,7 @@ fun LanguageSwitch(
 ) {
     val ruPath = remember { PathParser().parsePathString(RU_PATH).toPath() }
     val enPath = remember { PathParser().parsePathString(EN_PATH).toPath() }
+    val colors = ScoreKeeperTheme.colors
     val t by animateFloatAsState(
         targetValue = if (language == AppLanguage.RU) 0f else 1f,
         animationSpec = spring(dampingRatio = 0.75f, stiffness = 400f),
@@ -146,8 +148,8 @@ fun LanguageSwitch(
     ) {
         val s = size.width / 94f
         withTransform({ scale(s, s, Offset.Zero) }) {
-            drawRoundRect(SwitchFrame, Offset.Zero, Size(94f, 81f), CornerRadius(25f))
-            drawRoundRect(SwitchTrack, Offset(4f, 4f), Size(86f, 74f), CornerRadius(25f))
+            drawRoundRect(colors.cardBorder, Offset.Zero, Size(94f, 81f), CornerRadius(25f))
+            drawRoundRect(colors.fieldBg, Offset(4f, 4f), Size(86f, 74f), CornerRadius(25f))
             // Белая плашка: в покое совпадает с путями из SVG (y 7→41, высота 34,
             // «внешние» углы круглые 24.3, «внутренние» 9.7 — при езде углы перетекают).
             val py = mix(7f, 41f, t)
@@ -164,9 +166,11 @@ fun LanguageSwitch(
                     ),
                 )
             }
-            drawPath(pill, Color.White)
-            drawPath(ruPath, lerp(LangSelected, LangUnselected, t))
-            drawPath(enPath, lerp(LangUnselected, LangSelected, t))
+            drawPath(pill, if (colors.dark) colors.tabFill else Color.White)
+            val selected = if (colors.dark) colors.accent else Color(0xFF2070F5)
+            val unselected = if (colors.dark) LangUnselectedDark else LangUnselected
+            drawPath(ruPath, lerp(selected, unselected, t))
+            drawPath(enPath, lerp(unselected, selected, t))
         }
     }
 }

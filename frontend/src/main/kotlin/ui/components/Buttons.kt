@@ -103,6 +103,7 @@ fun SportButton(
             }
             .drawBehind {
                 // свечение из Figma: 0 / 14 / blur 56.4 / spread -11, цвет #2171F4
+                // В тёмной теме — золотое свечение (кнопки на макете тёмной темы жёлтые).
                 val h = hover.value
                 val p = press.value
                 val inset = 11.dp.toPx()
@@ -112,14 +113,20 @@ fun SportButton(
                     topLeft = Offset(inset - 3.dp.toPx(), inset + (14f + 10f * h - 8f * p).dp.toPx()),
                     size = Size(glowW, glowH),
                     corner = glowH / 2f,
-                    color = colors.buttonGlow,
+                    color = if (colors.dark) colors.accent.copy(alpha = 0.55f) else colors.buttonGlow,
                     sigma = (28.2f + 6f * h).dp.toPx(),
                 )
             }
             .hoverable(interaction)
             .pointerHoverIcon(PointerIcon.Hand)
             .clip(RoundedCornerShape(50))
-            .background(Brush.horizontalGradient(listOf(colors.buttonStart, colors.buttonEnd)))
+            .background(
+                if (colors.dark) {
+                    Brush.horizontalGradient(listOf(Color(0xFFE9BE32), colors.highlightFill))
+                } else {
+                    Brush.horizontalGradient(listOf(colors.buttonStart, colors.buttonEnd))
+                },
+            )
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
     ) {
         icon(
@@ -134,7 +141,10 @@ fun SportButton(
         ) {
             BasicText(
                 text = label,
-                style = type.button.copy(color = colors.onButton, lineHeight = type.button.fontSize),
+                style = type.button.copy(
+                    color = if (colors.dark) colors.panelOnAccent else colors.onButton,
+                    lineHeight = type.button.fontSize,
+                ),
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Visible,

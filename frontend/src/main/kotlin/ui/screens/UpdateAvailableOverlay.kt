@@ -42,6 +42,7 @@ import ui.theme.stringsFor
 /** Compact update notice drawn on the home screen using the supplied 830×259 SVG geometry. */
 @Composable
 fun UpdateAvailableOverlay(
+    darkTheme: Boolean,
     language: AppLanguage,
     downloading: Boolean,
     errorMessage: String?,
@@ -49,7 +50,8 @@ fun UpdateAvailableOverlay(
     onInstallLater: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ScoreKeeperTheme(colors = colorsFor(false), strings = stringsFor(language)) {
+    ScoreKeeperTheme(colors = colorsFor(darkTheme), strings = stringsFor(language)) {
+        val colors = ScoreKeeperTheme.colors
         val type = ScoreKeeperTheme.typography
         val russian = language == AppLanguage.RU
         val appear = remember { Animatable(0f) }
@@ -74,13 +76,13 @@ fun UpdateAvailableOverlay(
                                 spotColor = Color.Black.copy(alpha = 0.61f),
                             )
                             .clip(RoundedCornerShape(50.dp))
-                            .background(Color.White),
+                            .background(colors.cardSurface),
                     )
 
                     FigmaText(
                         if (russian) "НОВОЕ ОБНОВЛЕНИЕ!" else "NEW UPDATE!",
                         type.cardTitle.copy(fontSize = 28.sp, lineHeight = 34.sp),
-                        Color(0xFF2070F5),
+                        colors.accentText,
                         Modifier.offset(11.dp, 43.dp),
                         TextAlign.Center,
                         794.dp,
@@ -95,7 +97,7 @@ fun UpdateAvailableOverlay(
                         style = type.teamLabel.copy(
                             fontSize = 20.sp,
                             lineHeight = 27.sp,
-                            color = Color.Black,
+                            color = colors.bodyText,
                             textAlign = TextAlign.Center,
                         ),
                         modifier = Modifier.offset(49.dp, 82.dp).size(718.dp, 56.dp),
@@ -106,7 +108,7 @@ fun UpdateAvailableOverlay(
                     if (errorMessage != null || downloading) {
                         BasicText(
                             text = errorMessage ?: if (russian) "СКАЧИВАНИЕ ОБНОВЛЕНИЯ…" else "DOWNLOADING UPDATE…",
-                            style = type.caption.copy(fontSize = 13.sp, color = Color(0xFFB3261E)),
+                            style = type.caption.copy(fontSize = 13.sp, color = colors.dangerText),
                             modifier = Modifier.offset(78.dp, 137.dp).size(674.dp, 22.dp),
                             maxLines = 1,
                             softWrap = false,
@@ -145,6 +147,7 @@ private fun UpdateActionButton(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
+    val colors = ScoreKeeperTheme.colors
     val type = ScoreKeeperTheme.typography
     val interaction = remember { MutableInteractionSource() }
     Box(
@@ -155,13 +158,13 @@ private fun UpdateActionButton(
                     topLeft = Offset(inset, inset),
                     size = Size(size.width - inset * 2f, size.height - inset * 2f),
                     corner = 16.dp.toPx(),
-                    color = Color(0x3800E74C),
+                    color = colors.statusOnline.copy(alpha = 0.22f),
                     sigma = 27.4.dp.toPx(),
                 )
             }
             .clip(RoundedCornerShape(16.dp))
-            .background(if (enabled) Color(0xFF69DB7C) else Color(0xFFB9D9BF))
-            .border(4.dp, Color(0xFFA7E29E), RoundedCornerShape(16.dp))
+            .background(if (enabled) colors.statusOnline else colors.switchOffFill)
+            .border(4.dp, colors.statusOnlineBorder, RoundedCornerShape(16.dp))
             .hoverable(interaction)
             .pointerHoverIcon(if (enabled) PointerIcon.Hand else PointerIcon.Default)
             .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick),
@@ -169,7 +172,11 @@ private fun UpdateActionButton(
     ) {
         BasicText(
             text,
-            style = type.teamLabel.copy(fontSize = 18.sp, color = Color(0xFF343F4B), textAlign = TextAlign.Center),
+            style = type.teamLabel.copy(
+                fontSize = 18.sp,
+                color = colors.onStatusOnline,
+                textAlign = TextAlign.Center,
+            ),
             maxLines = 1,
             softWrap = false,
         )

@@ -33,6 +33,26 @@ object Brand {
     val Yellow = Color(0xFFFFD43B)
 }
 
+/**
+ * Тёмная палитра экрана матча — цвета сняты пипеткой с макетов
+ * «Волейбол (В процессе).png» и «Меню настроек.png»:
+ *  • фон окна #070F2B (тёмно-синий), панели/карточки #141F31, обводки/плашки #212E44;
+ *  • акцент — жёлтый #DFAF24 (кнопки, подписи, таймер), крупный заголовок — молочно-белый #E9F1F8;
+ *  • вторичный текст (счёт матча, логотип-заглушка) — приглушённый сизый #6E93B8.
+ */
+object Dark {
+    val Window = Color(0xFF070F2B)
+    val Card = Color(0xFF141F31)
+    val Pill = Color(0xFF212E44)
+    val Gold = Color(0xFFDFAF24)
+    val GoldSoft = Color(0xFFFFCA1E)
+    val HeaderText = Color(0xFFE9F1F8)
+    val SectionText = Color(0xFF5994C2)
+    val White = Color(0xFFF4F8FC)
+    val Green = Color(0xFF4ED27A)
+    val GreenText = Color(0xFF7BE39B)
+}
+
 // ───────────────────────── Цвета темы ─────────────────────────
 
 @Immutable
@@ -74,6 +94,30 @@ class ScoreKeeperColors(
     val logoPlaceholder: Color, // серый круг, когда лого не загружено
     val previewBorder: Color,   // обводка панели предпросмотра
     val outlineSoft: Color,     // мягкая обводка (пилюля «НАЗАД»)
+    // ── Дополнительные токены (нужны, чтобы тёмная тема не «ломалась») ──
+    val dark: Boolean,              // какая тема сейчас активна (для рисования фона и свечений)
+    val accent: Color,              // акцент экрана матча: кнопки, пилюли, обводки, таймер, «+1»
+    val accentText: Color,          // текст на акцентной заливке / активная подпись
+    val accentSoft: Color,          // приглушённый акцент (неактивные подписи, обводки на тёмном)
+    val screenTitle: Color,         // крупный заголовок вида спорта на экране матча
+    val screenSubtitle: Color,      // «Счёт матча» и прочий вторичный текст
+    val panelOnAccent: Color,       // текст/иконки поверх акцентной заливки
+    val highlightFill: Color,       // основной CTA («НАЧАТЬ / ЗАВЕРШИТЬ МАТЧ»)
+    val onHighlight: Color,         // текст на основном CTA
+    val highlightBorder: Color,     // обводка основного CTA
+    val tabFill: Color,             // плашка-вкладка («ОЧКИ», «ПАРТИЯ N»)
+    val previewStrip: Color,        // фон панели предпросмотра вокруг табло
+    val fieldStroke: Color,         // обводка полей ввода
+    val dangerText: Color,          // предупреждения (сброс счёта, ошибки)
+    val isLightSurface: Boolean,    // карточки/диалоги светлые (нужно для контраста текста)
+    val bodyText: Color,            // обычный текст на карточке/диалоге
+    val statusOnline: Color,        // «зелёная» кнопка подтверждения / индикатор «в процессе»
+    val statusOnlineBorder: Color,  // её обводка
+    val onStatusOnline: Color,      // подпись на зелёной кнопке
+    val switchOffFill: Color,       // выключенный переключатель
+    val backButtonBg: Color,        // круглая кнопка «назад» в углу карточек
+    val backButtonBorder: Color,    // её обводка
+    val backButtonArrow: Color,     // стрелка внутри неё
 )
 
 /** Светлая тема (по умолчанию). Тёмная — DarkColors ниже. */
@@ -113,6 +157,29 @@ val LightColors = ScoreKeeperColors(
     logoPlaceholder = Color(0xFFDDDDDD),
     previewBorder = Color(0xFFBBDAEE),
     outlineSoft = Color(0xFFC9D8E8),
+    dark = false,
+    accent = Color(0xFF2070F5),
+    accentText = Color(0xFF2070F5),
+    accentSoft = Color(0xFFC9D8E8),
+    screenTitle = Color(0xFF0A2244),
+    screenSubtitle = Color(0xFF5F7186),
+    panelOnAccent = Color.White,
+    highlightFill = Color(0xFF6B8EC7),
+    onHighlight = Color.White,
+    highlightBorder = Color(0xFF2171F4),
+    tabFill = Color(0xFFE5F1FD),
+    previewStrip = Color(0xFF91C0DC),
+    fieldStroke = Color(0xFF9EC8E2),
+    dangerText = Color(0xFFFF0000),
+    isLightSurface = true,
+    bodyText = Color.Black,
+    statusOnline = Color(0xFF69DB7C),
+    statusOnlineBorder = Color(0xFFA7E29E),
+    onStatusOnline = Color(0xFF343F4B),
+    switchOffFill = Color(0xFFB9D9BF),
+    backButtonBg = Color.White,
+    backButtonBorder = Color(0xFFE3F0F9),
+    backButtonArrow = Color(0xFF06326D),
 )
 
 /** Тёмная тема: тот же фирменный синий и яркие овалы, но на тёмно-синем фоне. */
@@ -152,6 +219,29 @@ val DarkColors = ScoreKeeperColors(
     logoPlaceholder = Color(0xFF2A3B57),
     previewBorder = Color(0xFF2E4A6E),
     outlineSoft = Color(0xFF33465F),
+    dark = true,
+    accent = Dark.Gold,
+    accentText = Dark.Gold,
+    accentSoft = Dark.SectionText,
+    screenTitle = Dark.HeaderText,
+    screenSubtitle = Color(0xFF6E93B8),
+    panelOnAccent = Dark.Card,
+    highlightFill = Dark.Gold,
+    onHighlight = Dark.Card,
+    highlightBorder = Color(0xFFC79A18),
+    tabFill = Dark.Pill,
+    previewStrip = Dark.Window,
+    fieldStroke = Color(0xFF35507A),
+    dangerText = Color(0xFFFF7A8A),
+    isLightSurface = false,
+    bodyText = Dark.HeaderText,
+    statusOnline = Color(0xFF4ED27A),
+    statusOnlineBorder = Color(0xFF7BE39B),
+    onStatusOnline = Dark.Window,
+    switchOffFill = Color(0xFF2A3B57),
+    backButtonBg = Color(0xFF1D2A42),
+    backButtonBorder = Color(0xFF2C3D5A),
+    backButtonArrow = Dark.HeaderText,
 )
 
 // ───────────────────────── Шрифты и типографика ─────────────────────────
@@ -189,6 +279,11 @@ class ScoreKeeperTypography(
     val caption: TextStyle,     // «РАЗРАБОТАНО ДЛЯ СПОРТИВНОЙ КОМИССИИ»
     val doneButton: TextStyle,  // «ГОТОВО»
     val field: TextStyle,       // текст в полях ввода
+    // Окно подсказок «ХОТКЕИ»
+    val panelTitle: TextStyle,  // «ХОТКЕИ» в шапке карточки
+    val panelHeader: TextStyle, // «КНОПКИ МАТЧА» / «ОСНОВНЫЕ»
+    val hotkeyLabel: TextStyle, // подпись рядом с клавишей
+    val hotkeyKey: TextStyle,   // символ на клавише («1», «Esc», «F1»…)
 )
 
 val DefaultTypography = ScoreKeeperTypography(
@@ -228,6 +323,26 @@ val DefaultTypography = ScoreKeeperTypography(
         fontSize = 31.sp,
     ),
     field = TextStyle(fontFamily = AqumTwo, fontSize = 20.sp),
+    panelTitle = TextStyle(
+        fontFamily = AqumTwo,
+        fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
+        fontSize = 46.sp,
+    ),
+    panelHeader = TextStyle(
+        fontFamily = AqumTwo,
+        fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
+        fontSize = 27.sp,
+    ),
+    hotkeyLabel = TextStyle(
+        fontFamily = AqumTwo,
+        fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
+        fontSize = 20.sp, lineHeight = 24.sp,
+    ),
+    hotkeyKey = TextStyle(
+        fontFamily = AqumTwo,
+        fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
+        fontSize = 26.sp,
+    ),
 )
 
 // ───────────────────────── Язык интерфейса ─────────────────────────
@@ -272,6 +387,21 @@ class AppStrings(
     val setsLabel: String,
     val courtSideLabel: String,
     val winnerLabel: String,
+    // Хоткеи (окно подсказок)
+    val hotkeys: String,
+    val hotkeysMatchButtons: String,
+    val hotkeysMain: String,
+    val hotkeyAddPoint1: String,
+    val hotkeyAddPoint2: String,
+    val hotkeyUndo: String,
+    val hotkeyCorrection: String,
+    val hotkeyReset: String,
+    val hotkeyStartMatch: String,
+    val hotkeyBack: String,
+    val hotkeySettings: String,
+    val hotkeyCloseApp: String,
+    val hotkeyMinimize: String,
+    val hotkeyDone: String,
 )
 
 val RuStrings = AppStrings(
@@ -310,6 +440,20 @@ val RuStrings = AppStrings(
     setsLabel = "ПАРТИИ",
     courtSideLabel = "СТОРОНА ПОЛЯ\nПОДАЮЩЕЙ КОМАНДЫ",
     winnerLabel = "ПОБЕДИТЕЛЬ",
+    hotkeys = "ХОТКЕИ",
+    hotkeysMatchButtons = "КНОПКИ МАТЧА",
+    hotkeysMain = "ОСНОВНЫЕ",
+    hotkeyAddPoint1 = "ДОБАВИТЬ ОЧКО\nКОМАНДЕ 1",
+    hotkeyAddPoint2 = "ДОБАВИТЬ ОЧКО\nКОМАНДЕ 2",
+    hotkeyUndo = "ОТКАТ",
+    hotkeyCorrection = "КОРРЕКТИРОВКА",
+    hotkeyReset = "СБРОС",
+    hotkeyStartMatch = "НАЧАТЬ/\nПРОДОЛЖИТЬ/\nЗАВЕРШИТЬ МАТЧ",
+    hotkeyBack = "НАЗАД",
+    hotkeySettings = "НАСТРОЙКИ",
+    hotkeyCloseApp = "ЗАКРЫТЬ\nПРИЛОЖЕНИЕ",
+    hotkeyMinimize = "СВЕРНУТЬ\nПРИЛОЖЕНИЕ",
+    hotkeyDone = "ГОТОВО/\nПОДТВЕРДИТЬ",
 )
 
 val EnStrings = AppStrings(
@@ -348,6 +492,20 @@ val EnStrings = AppStrings(
     setsLabel = "SETS",
     courtSideLabel = "SERVING TEAM'S\nCOURT SIDE",
     winnerLabel = "WINNER",
+    hotkeys = "HOTKEYS",
+    hotkeysMatchButtons = "MATCH BUTTONS",
+    hotkeysMain = "GENERAL",
+    hotkeyAddPoint1 = "ADD A POINT\nTO TEAM 1",
+    hotkeyAddPoint2 = "ADD A POINT\nTO TEAM 2",
+    hotkeyUndo = "UNDO",
+    hotkeyCorrection = "CORRECTION",
+    hotkeyReset = "RESET",
+    hotkeyStartMatch = "START/\nCONTINUE/\nEND MATCH",
+    hotkeyBack = "BACK",
+    hotkeySettings = "SETTINGS",
+    hotkeyCloseApp = "CLOSE\nAPP",
+    hotkeyMinimize = "MINIMIZE\nAPP",
+    hotkeyDone = "DONE/\nCONFIRM",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings =

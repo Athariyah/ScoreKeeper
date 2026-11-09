@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import ui.components.LanguageSwitch
 import ui.components.ThemeSwitch
 import ui.components.drawBlurredRoundRect
+import ui.components.trackTextFocus
 import ui.theme.AppLanguage
 import ui.theme.DesignStage
 import ui.theme.ScoreKeeperTheme
@@ -79,8 +80,15 @@ import ui.theme.stringsFor
 // кнопка «назад» 55×55, кнопка загрузки фото 220×220, поле ввода 249×52,
 // кнопка «ГОТОВО» 177×55 (текст в RU — оригинальные векторные глифы из SVG).
 
-/** Обводка синих текстов из Figma: #E2EEF7, 1 px, снаружи. */
-private val TextStrokeColor = Color(0xFFE2EEF7)
+/**
+ * Обводка синих текстов из Figma: #E2EEF7, 1 px, снаружи.
+ * В тёмной теме светлая обводка «светила» бы вокруг букв, поэтому там она = цвет карточки.
+ */
+@Composable
+private fun textStrokeColor(): Color {
+    val colors = ScoreKeeperTheme.colors
+    return if (colors.dark) colors.cardSurface else Color(0xFFE2EEF7)
+}
 
 /**
  * Текст как в Figma: заливка + внешняя обводка 1 design-px (штрих 2 px по центру контура,
@@ -116,7 +124,7 @@ internal fun FigmaText(
     Canvas(modifier.size(w, h)) {
         drawText(
             layout,
-            color = TextStrokeColor,
+            color = textStrokeColor(),
             drawStyle = Stroke(width = 2f * dens.density, join = StrokeJoin.Round),
         )
         drawText(layout, color = color)
@@ -125,7 +133,7 @@ internal fun FigmaText(
 
 /** Общая «рамка» оверлея: затемнение на всё окно + карточка по центру + кнопка «назад». */
 @Composable
-private fun OverlayScaffold(
+internal fun OverlayScaffold(
     cardWidth: Dp,
     cardHeight: Dp,
     onBack: () -> Unit,
@@ -178,6 +186,7 @@ private const val BACK_ARROW_PATH = "M41.3332 28H14.6665M24.6665 18L14.6665 28L2
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun BackArrowButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = ScoreKeeperTheme.colors
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val pressed by interaction.collectIsPressedAsState()
@@ -210,13 +219,13 @@ internal fun BackArrowButton(onClick: () -> Unit, modifier: Modifier = Modifier)
     ) {
         val s = size.width / 55f
         withTransform({ scale(s, s, Offset.Zero) }) {
-            drawCircle(Color.White, radius = 26f, center = Offset(27.5f, 27.5f))
+            drawCircle(colors.backButtonBg, radius = 26f, center = Offset(27.5f, 27.5f))
             drawCircle(
-                Color(0xFFE3F0F9), radius = 26f, center = Offset(27.5f, 27.5f),
+                colors.backButtonBorder, radius = 26f, center = Offset(27.5f, 27.5f),
                 style = Stroke(3f),
             )
             drawPath(
-                arrowPath, Color(0xFF06326D),
+                arrowPath, colors.backButtonArrow,
                 style = Stroke(width = 3f, cap = StrokeCap.Round, join = StrokeJoin.Round),
             )
         }
@@ -243,14 +252,14 @@ fun SettingsOverlay(
                 Modifier.fillMaxWidth().offset(y = 22.dp).height(56.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                FigmaText(strings.settingsTitle, type.heading, colors.headingBlue)
+                FigmaText(strings.settingsTitle, type.heading, colors.accentText)
             }
 
             Box(
                 Modifier.offset(46.dp, 124.dp).size(560.dp, 50.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                FigmaText(strings.appTheme, type.heading, colors.headingBlue)
+                FigmaText(strings.appTheme, type.heading, colors.accentText)
             }
             ThemeSwitch(darkTheme, onToggleTheme, Modifier.offset(634.dp, 124.dp))
             Box(Modifier.offset(46.dp, 177.dp).size(700.dp, 2.dp).background(colors.divider))
@@ -259,7 +268,7 @@ fun SettingsOverlay(
                 Modifier.offset(46.dp, 213.dp).size(560.dp, 50.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                FigmaText(strings.appLanguage, type.heading, colors.headingBlue)
+                FigmaText(strings.appLanguage, type.heading, colors.accentText)
             }
             LanguageSwitch(language, onLanguageChange, Modifier.offset(634.dp, 183.dp))
             Box(Modifier.offset(46.dp, 266.dp).size(700.dp, 2.dp).background(colors.divider))
@@ -301,7 +310,7 @@ fun TeamSetupOverlay(
             FigmaText(
                 text = if (forTennis) strings.setupPlayersTitle else strings.setupTeamsTitle,
                 style = type.cardTitle,
-                color = colors.headingBlue,
+                color = colors.accentText,
                 modifier = Modifier.offset(159.dp, 20.dp),
                 textAlign = TextAlign.Center,
                 fixedWidth = 475.dp,
@@ -346,7 +355,7 @@ private fun TeamLabel(text: String, modifier: Modifier = Modifier) {
     val colors = ScoreKeeperTheme.colors
     val type = ScoreKeeperTheme.typography
     Box(modifier.size(220.dp, 44.dp), contentAlignment = Alignment.Center) {
-        FigmaText(text, type.teamLabel, colors.headingBlue)
+        FigmaText(text, type.teamLabel, colors.accentText)
     }
 }
 
@@ -360,6 +369,7 @@ private const val UPLOAD_PATH =
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun UploadCircle(image: ImageBitmap?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = ScoreKeeperTheme.colors
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val pressed by interaction.collectIsPressedAsState()
@@ -401,8 +411,9 @@ private fun UploadCircle(image: ImageBitmap?, onClick: () -> Unit, modifier: Mod
             Canvas(Modifier.fillMaxSize()) {
                 val s = size.width / 220f
                 withTransform({ scale(s, s, Offset.Zero) }) {
-                    drawCircle(Color(0xFFD9D9D9), radius = 110f, center = Offset(110f, 110f))
-                    drawPath(uploadPath, Color.White)
+                    drawCircle(colors.logoPlaceholder, radius = 110f, center = Offset(110f, 110f))
+                    // На тёмной теме «белая» иконка загрузки сливалась с серым кругом — берём цвет текста.
+                    drawPath(uploadPath, if (colors.dark) colors.iconButtonFg else Color.White)
                 }
             }
         }
@@ -420,7 +431,7 @@ private fun NameField(value: String, onValueChange: (String) -> Unit, modifier: 
             .size(249.dp, 52.dp)
             .clip(RoundedCornerShape(18.dp))
             .background(colors.fieldBg)
-            .border(3.dp, Color(0xFF9EC8E2), RoundedCornerShape(18.dp)),
+            .border(3.dp, colors.fieldStroke, RoundedCornerShape(18.dp)),
         contentAlignment = Alignment.CenterStart,
     ) {
         if (value.isEmpty()) {
@@ -440,7 +451,8 @@ private fun NameField(value: String, onValueChange: (String) -> Unit, modifier: 
             singleLine = true,
             textStyle = type.field.copy(color = colors.fieldText),
             cursorBrush = SolidColor(colors.fieldText),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+                .trackTextFocus("teamName"),
         )
     }
 }
