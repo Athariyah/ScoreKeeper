@@ -55,8 +55,11 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
@@ -69,7 +72,9 @@ import com.example.ApiClient
 import com.example.ScoreResponse
 import com.example.TennisSetScore
 import com.example.VolleyballSetScore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.jetbrains.skia.Image
 import ui.components.OvalsCanvas
 import ui.components.SettingsButton
@@ -82,6 +87,7 @@ import ui.screens.FigmaText
 import ui.screens.MenuScreen
 import ui.screens.SettingsOverlay
 import ui.screens.TeamSetupOverlay
+import ui.screens.UpdateAvailableOverlay
 import ui.theme.AppLanguage
 import ui.theme.AppStrings
 import ui.theme.ArialFamily
@@ -200,6 +206,20 @@ private fun runApp() = application {
     var language by remember { mutableStateOf(AppLanguage.RU) }
     var showSettings by remember { mutableStateOf(false) }
 
+    // GitHub Releases updater: check once per launch and offer only while the home screen is idle.
+    var availableUpdate by remember { mutableStateOf<AppUpdate?>(null) }
+    var updatePromptShown by remember { mutableStateOf(false) }
+    var showUpdatePrompt by remember { mutableStateOf(false) }
+    var updateDownloading by remember { mutableStateOf(false) }
+    var updateError by remember { mutableStateOf<String?>(null) }
+    var updateInstallFuture by remember { mutableStateOf<java.util.concurrent.CompletableFuture<File>?>(null) }
+    LaunchedEffect(Unit) {
+        availableUpdate = withContext(Dispatchers.IO) {
+            runCatching { UpdateService.checkForUpdate() }.getOrNull()
+        }
+    }
+
+
     // Загрузочный экран: при запуске приложения и при переходах меню ↔ режим игры.
     var splashVisible by remember { mutableStateOf(true) }
     var splashKey by remember { mutableStateOf(0) }
@@ -208,6 +228,42 @@ private fun runApp() = application {
         delay(if (splashKey == 0) 1_100 else 700)
         splashVisible = false
     }
+    LaunchedEffect(
+        availableUpdate, currentScreen, splashVisible, showSetupDialog, showSettings,
+        showVolleyballSettings, updatePromptShown,
+    ) {
+        if (availableUpdate != null && !updatePromptShown && currentScreen == Screen.menu &&
+            !splashVisible && !showSetupDialog && !showSettings && !showVolleyballSettings
+        ) {
+            updatePromptShown = true
+            showUpdatePrompt = true
+        }
+    }
+    LaunchedEffect(currentScreen, showSetupDialog, showSettings, showVolleyballSettings) {
+        if (showUpdatePrompt && (currentScreen != Screen.menu || showSetupDialog || showSettings || showVolleyballSettings)) {
+            // Once dismissed by navigation, the update notice won't interrupt this session again.
+            showUpdatePrompt = false
+            updatePromptShown = true
+        }
+    }
+    LaunchedEffect(updateInstallFuture) {
+        val future = updateInstallFuture ?: return@LaunchedEffect
+        updateDownloading = true
+        try {
+            withContext(Dispatchers.IO) { future.get() }
+            exitApplication()
+        } catch (_: Exception) {
+            updateDownloading = false
+            updateInstallFuture = null
+            updateError = if (language == AppLanguage.RU) {
+                "НЕ УДАЛОСЬ СКАЧАТЬ ОБНОВЛЕНИЕ"
+            } else {
+                "UPDATE DOWNLOAD FAILED"
+            }
+            showUpdatePrompt = true
+        }
+    }
+
 
     // Безрамочное окно на весь экран: Maximized + undecorated — верхней системной
     // панельки не видно, но это обычное окно (не эксклюзивный Fullscreen), поэтому
@@ -306,6 +362,51 @@ private fun runApp() = application {
             }
 
             SplashOverlay(visible = splashVisible, language = language)
+
+            if (showUpdatePrompt && currentScreen == Screen.menu && !showSetupDialog && !showSettings && !showVolleyballSettings) {
+                UpdateAvailableOverlay(
+                    language = language,
+                    downloading = updateDownloading,
+                    errorMessage = updateError,
+                    onInstallNow = {
+                        val update = availableUpdate
+                        if (update != null && !updateDownloading) {
+                            updateError = null
+                            updateInstallFuture = runCatching {
+                                UpdateService.scheduleInstallAfterExit(update, relaunchApp = true)
+                            }.getOrElse {
+                                updateError = if (language == AppLanguage.RU) {
+                                    "АВТООБНОВЛЕНИЕ ДОСТУПНО ТОЛЬКО В УСТАНОВЛЕННОЙ ВЕРСИИ"
+                                } else {
+                                    "AUTO-UPDATE REQUIRES THE INSTALLED APP"
+                                }
+                                null
+                            }
+                        }
+                    },
+                    onInstallLater = {
+                        val update = availableUpdate
+                        if (update != null && !updateDownloading) {
+                            runCatching {
+                                UpdateService.scheduleInstallAfterExit(update, relaunchApp = false)
+                            }.onSuccess {
+                                showUpdatePrompt = false
+                                updateError = null
+                            }.onFailure {
+                                updateError = if (language == AppLanguage.RU) {
+                                    "НЕ УДАЛОСЬ ПОДГОТОВИТЬ ОБНОВЛЕНИЕ"
+                                } else {
+                                    "COULD NOT PREPARE THE UPDATE"
+                                }
+                            }
+                        }
+                    },
+                    onDismiss = {
+                        showUpdatePrompt = false
+                        updatePromptShown = true
+                    },
+                )
+            }
         }
     }
 
@@ -1739,6 +1840,107 @@ private fun CorrectionDialogOverlay(
     }
 }
 
+@Composable
+private fun CloseMatchConfirmationDialog(
+    language: AppLanguage,
+    isSubmitting: Boolean,
+    errorMessage: String?,
+    onBack: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val colors = ScoreKeeperTheme.colors
+    val type = ScoreKeeperTheme.typography
+    val russian = language == AppLanguage.RU
+
+    val warning = remember(russian) {
+        buildAnnotatedString {
+            if (russian) {
+                append("ЕСЛИ ВЫ ПОДТВЕРДИТЕ ЗАКРЫТИЕ\nМАТЧА, ТО СЧЁТ БУДЕТ ")
+                withStyle(SpanStyle(color = Color(0xFFFF0000))) { append("СБРОШЕН") }
+            } else {
+                append("IF YOU CONFIRM CLOSING THE MATCH,\nTHE SCORE WILL BE ")
+                withStyle(SpanStyle(color = Color(0xFFFF0000))) { append("RESET") }
+            }
+        }
+    }
+
+    MatchDialogScaffold(cardHeight = 411.dp, onBack = onBack) {
+        FigmaText(
+            if (russian) "ВЫ УВЕРЕНЫ?" else "ARE YOU SURE?",
+            type.cardTitle.copy(fontSize = 40.sp, lineHeight = 46.sp),
+            colors.headingBlue,
+            Modifier.offset(0.dp, 28.dp),
+            TextAlign.Center,
+            794.dp,
+        )
+        BasicText(
+            text = warning,
+            style = type.teamLabel.copy(
+                fontSize = 28.sp,
+                lineHeight = 36.sp,
+                color = Color.Black,
+                textAlign = TextAlign.Center,
+            ),
+            modifier = Modifier.offset(40.dp, 157.dp).size(714.dp, 80.dp),
+            maxLines = 2,
+            softWrap = false,
+        )
+        if (errorMessage != null) {
+            BasicText(
+                errorMessage,
+                style = type.caption.copy(fontSize = 13.sp, color = Color(0xFFB00020), textAlign = TextAlign.Center),
+                modifier = Modifier.offset(50.dp, 267.dp).size(694.dp, 34.dp),
+                maxLines = 2,
+            )
+        }
+        CloseMatchConfirmButton(
+            text = if (russian) "ПОДТВЕРДИТЬ" else "CONFIRM",
+            enabled = !isSubmitting,
+            onClick = onConfirm,
+            modifier = Modifier.offset(237.dp, 322.dp),
+        )
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun CloseMatchConfirmButton(
+    text: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val type = ScoreKeeperTheme.typography
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        modifier.size(320.dp, 51.dp)
+            .drawBehind {
+                val inset = 11.dp.toPx()
+                drawBlurredRoundRect(
+                    topLeft = Offset(inset, inset),
+                    size = Size(size.width - 2f * inset, size.height - 2f * inset),
+                    corner = 23.dp.toPx(),
+                    color = Color(0x3800E74C),
+                    sigma = 27.4.dp.toPx(),
+                )
+            }
+            .clip(RoundedCornerShape(23.dp))
+            .background(if (enabled) Color(0xFF69DB7C) else Color(0xFFB9D9BF))
+            .border(4.dp, Color(0xFFA7E29E), RoundedCornerShape(23.dp))
+            .hoverable(interaction)
+            .pointerHoverIcon(if (enabled) PointerIcon.Hand else PointerIcon.Default)
+            .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        BasicText(
+            text,
+            style = type.doneButton.copy(fontSize = 30.sp, color = Color(0xFF343F4B)),
+            maxLines = 1,
+            softWrap = false,
+        )
+    }
+}
+
 // ───────────────────────── Сам экран ─────────────────────────
 
 @Composable
@@ -1765,6 +1967,9 @@ fun VoleyballScreen(
     var showTossDialog by remember { mutableStateOf(false) }
     var showTextDialog by remember { mutableStateOf(false) }
     var showCorrectionDialog by remember { mutableStateOf(false) }
+    var showExitConfirmationDialog by remember { mutableStateOf(false) }
+    var isClosingMatch by remember { mutableStateOf(false) }
+    var closeMatchError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(errorMsg) {
         if (errorMsg != null) {
@@ -1912,12 +2117,8 @@ fun VoleyballScreen(
                 )
                 SettingsButton(onClick = onSettings, modifier = Modifier.offset(1536.dp, 27.dp))
                 BackPill(strings.back, {
-                    // При выходе сразу скрываем сообщение на табло: локально и пустой рассылкой по WS.
-                    onTickerUpdate("")
-                    ApiClient.sendText("", onResult = {})
-                    // Сбрасываем матч на сервере (/reset), затем уходим на главный экран.
-                    ApiClient.reset(onResult = apply, onError = { errorMsg = it })
-                    onBack()
+                    showExitConfirmationDialog = true
+                    closeMatchError = null
                 }, Modifier.offset(1634.dp, 28.dp))
 
                 // ── Заголовок вида спорта ──
@@ -2177,6 +2378,48 @@ fun VoleyballScreen(
                             )
                         }
                         showCorrectionDialog = false
+                    },
+                )
+            }
+
+            if (showExitConfirmationDialog) {
+                CloseMatchConfirmationDialog(
+                    language = language,
+                    isSubmitting = isClosingMatch,
+                    errorMessage = closeMatchError,
+                    onBack = {
+                        if (!isClosingMatch) {
+                            showExitConfirmationDialog = false
+                            closeMatchError = null
+                        }
+                    },
+                    onConfirm = {
+                        if (!isClosingMatch) {
+                            closeMatchError = null
+                            isClosingMatch = true
+                            ApiClient.reset(
+                                onResult = { response ->
+                                    if (response != null) {
+                                        onTickerUpdate("")
+                                        ApiClient.sendText("", onResult = {})
+                                        onMatchUpdate(MatchState.fromResponse(response))
+                                        showExitConfirmationDialog = false
+                                        onBack()
+                                    } else {
+                                        isClosingMatch = false
+                                        closeMatchError = if (language == AppLanguage.RU) {
+                                            "НЕ УДАЛОСЬ СБРОСИТЬ МАТЧ. ПОВТОРИТЕ ПОПЫТКУ."
+                                        } else {
+                                            "COULD NOT RESET THE MATCH. PLEASE TRY AGAIN."
+                                        }
+                                    }
+                                },
+                                onError = { message ->
+                                    isClosingMatch = false
+                                    closeMatchError = message
+                                },
+                            )
+                        }
                     },
                 )
             }
