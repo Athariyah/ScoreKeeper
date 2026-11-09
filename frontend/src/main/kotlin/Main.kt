@@ -106,7 +106,6 @@ import ui.theme.ScoreKeeperTheme
 import ui.theme.colorsFor
 import ui.theme.stringsFor
 import java.io.File
-import kotlin.system.exitProcess
 
 fun formatTime(totalSeconds: Int): String {
     val minutes = totalSeconds / 60
@@ -288,7 +287,8 @@ private fun runApp() = application {
     /** Единая точка «закрыть приложение» для кнопки окна и горячей клавиши F1. */
     fun closeRequest() {
         // В разгаре матча сначала спрашиваем: одним нажатием счёт не потерять.
-        if (currentScreen == Screen.game && match.status == "IN_PROGRESS") {
+        val inMatchScreen = currentScreen == Screen.valeball || currentScreen == Screen.tennis
+        if (inMatchScreen && match.status == "IN_PROGRESS") {
             confirmExit = true
         } else {
             exitApplication()
@@ -1255,6 +1255,7 @@ private fun SideArrow(
 /** Круглый указатель L/R между стрелками: точные контуры и глифы букв из SVG 40×40. */
 @Composable
 private fun LrBadge(courtSide: String, modifier: Modifier = Modifier) {
+    val colors = ScoreKeeperTheme.colors
     val basePath = remember { PathParser().parsePathString("M39 20C39 30.4934 30.4934 39 20 39C9.50659 39 1 30.4934 1 20C1 9.50659 9.50659 1 20 1C30.4934 1 39 9.50659 39 20Z").toPath() }
     val leftLetterPath = remember { PathParser().parsePathString("M7.19883 25.6V14.4C7.19883 14.0133 7.33216 13.6867 7.59883 13.42C7.87883 13.14 8.21216 13 8.59883 13C8.9855 13 9.31883 13.14 9.59883 13.42C9.86549 13.6867 9.99883 14.0133 9.99883 14.4V24.2H16.5988C16.9855 24.2 17.3188 24.3333 17.5988 24.6C17.8655 24.88 17.9988 25.2133 17.9988 25.6C17.9988 25.9867 17.8655 26.3133 17.5988 26.58C17.3188 26.86 16.9855 27 16.5988 27H8.59883C8.21216 27 7.87883 26.86 7.59883 26.58C7.33216 26.3133 7.19883 25.9867 7.19883 25.6Z").toPath() }
     val rightLetterPath = remember { PathParser().parsePathString("M24.993 15.8V20.2H29.593C30.193 20.2 30.713 19.9867 31.153 19.56C31.5796 19.12 31.793 18.6 31.793 18C31.793 17.3867 31.5796 16.8667 31.153 16.44C30.713 16.0133 30.193 15.8 29.593 15.8H24.993ZM22.193 25.6V14.4C22.193 14.0133 22.3263 13.68 22.593 13.4C22.873 13.1333 23.2063 13 23.593 13H29.593C30.9663 13 32.1463 13.4867 33.133 14.46C34.1063 15.4467 34.593 16.6267 34.593 18C34.593 18.9067 34.3663 19.7467 33.913 20.52C33.4596 21.2667 32.8596 21.86 32.113 22.3L34.233 24.66C34.4863 24.9533 34.6063 25.2933 34.593 25.68C34.5663 26.0667 34.413 26.3867 34.133 26.64C33.8663 26.88 33.553 27 33.193 27C32.7796 27 32.433 26.8467 32.153 26.54L28.973 23H24.993V25.6C24.993 25.9867 24.8596 26.3133 24.593 26.58C24.313 26.86 23.9796 27 23.593 27C23.2063 27 22.873 26.86 22.593 26.58C22.3263 26.3133 22.193 25.9867 22.193 25.6Z").toPath() }
@@ -2250,6 +2251,7 @@ private fun CloseMatchConfirmButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val colors = ScoreKeeperTheme.colors
     val type = ScoreKeeperTheme.typography
     val interaction = remember { MutableInteractionSource() }
     Box(

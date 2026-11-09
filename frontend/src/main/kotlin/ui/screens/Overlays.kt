@@ -81,16 +81,6 @@ import ui.theme.stringsFor
 // кнопка «ГОТОВО» 177×55 (текст в RU — оригинальные векторные глифы из SVG).
 
 /**
- * Обводка синих текстов из Figma: #E2EEF7, 1 px, снаружи.
- * В тёмной теме светлая обводка «светила» бы вокруг букв, поэтому там она = цвет карточки.
- */
-@Composable
-private fun textStrokeColor(): Color {
-    val colors = ScoreKeeperTheme.colors
-    return if (colors.dark) colors.cardSurface else Color(0xFFE2EEF7)
-}
-
-/**
  * Текст как в Figma: заливка + внешняя обводка 1 design-px (штрих 2 px по центру контура,
  * внутренняя половина перекрывается заливкой). BasicText так не умеет — рисуем через Canvas.
  */
@@ -105,6 +95,10 @@ internal fun FigmaText(
 ) {
     val measurer = rememberTextMeasurer()
     val dens = LocalDensity.current
+    // Обводка синих текстов из Figma: #E2EEF7, 1 px, снаружи.
+    // В тёмной теме светлая обводка «светила» бы вокруг букв, поэтому там она = цвет карточки.
+    val colors = ScoreKeeperTheme.colors
+    val strokeColor = if (colors.dark) colors.cardSurface else Color(0xFFE2EEF7)
     val layout = remember(text, style, textAlign, fixedWidth, dens) {
         measurer.measure(
             text = AnnotatedString(text),
@@ -124,7 +118,7 @@ internal fun FigmaText(
     Canvas(modifier.size(w, h)) {
         drawText(
             layout,
-            color = textStrokeColor(),
+            color = strokeColor,
             drawStyle = Stroke(width = 2f * dens.density, join = StrokeJoin.Round),
         )
         drawText(layout, color = color)

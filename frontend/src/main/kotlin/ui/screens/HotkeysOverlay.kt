@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -186,8 +187,9 @@ private fun HotkeyRowClickable(
 
     Box(
         Modifier
+            .offset(y = 2.dp)
             .fillMaxWidth()
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(glow.copy(alpha = (if (dark) 0.035f else 0.05f) * hover))
             .graphicsLayer {
                 val s = 1f + 0.012f * hover
@@ -196,8 +198,7 @@ private fun HotkeyRowClickable(
             }
             .hoverable(interaction)
             .pointerHoverIcon(PointerIcon.Hand)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .then(Modifier.offset(y = 2.dp)),
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
     ) {
         Box(Modifier.height(44.dp), contentAlignment = Alignment.CenterStart) {
             HotkeyRowView(
