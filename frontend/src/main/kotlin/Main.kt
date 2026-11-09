@@ -1,4 +1,12 @@
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -101,14 +109,14 @@ enum class VolleyballPreset { SHORT, LONG, CUSTOM }
 data class VolleyballMatchSettings(
     val preset: VolleyballPreset = VolleyballPreset.CUSTOM,
     val setCount: Int = 3,
-    /** Goals for sets 1–4 and the deciding set; sets not visible in 3-set mode are retained. */
+    /** Очки партий 1–4 и решающей (ТБ — всегда индекс 4). Партии, скрытые в режиме до 3 партий, сохраняются. */
     val setPoints: List<Int> = listOf(15, 25, 15, 25, 15),
 ) {
     fun toApiConfig(): com.example.VolleyballMatchConfig = com.example.VolleyballMatchConfig(
         setsToWin = setCount / 2 + 1,
-        // The backend expects five entries. For best-of-three, the third entry is the deciding set.
+        // Бэкенд ждёт пять значений. В игре до 3 партий решающая — третья, её очки берём из ТБ.
         setPoints = if (setCount == 3) {
-            listOf(setPoints[0], setPoints[1], setPoints[2], setPoints[2], setPoints[2])
+            listOf(setPoints[0], setPoints[1], setPoints[4], setPoints[4], setPoints[4])
         } else {
             setPoints.take(5)
         },
@@ -116,8 +124,8 @@ data class VolleyballMatchSettings(
 }
 
 private fun volleyballPresetFor(setCount: Int, points: List<Int>): VolleyballPreset = when {
-    setCount == 3 && points.take(3) == listOf(15, 15, 15) -> VolleyballPreset.SHORT
-    setCount == 5 && points.take(5) == listOf(25, 25, 25, 25, 15) -> VolleyballPreset.LONG
+    setCount == 3 && points[0] == 15 && points[1] == 15 && points[4] == 15 -> VolleyballPreset.SHORT
+    setCount == 5 && points.take(4).all { it == 25 } && points[4] == 15 -> VolleyballPreset.LONG
     else -> VolleyballPreset.CUSTOM
 }
 
@@ -1082,6 +1090,297 @@ private fun MatchDialogScaffold(
 
 // ───────────────────────── Диалоги ─────────────────────────
 
+// ───────────────────────── «Настрой свой матч» ─────────────────────────
+//
+// Геометрия, размеры шрифта и цвета ЗАМЕРЕНЫ по Export.pdf (3 страницы, 1920×1080 @2x).
+// Все координаты — px макета (1 dp = 1 px) внутри карточки 794×612 (её левый верх на макете = 563, 234).
+//
+// Шрифт Aqum Two Classic: заголовок 32, подписи секций 23, пресеты 19, «3/5 партий» 20,
+// цифры в шапках колонок 32, значения 15/25 — 20 с разрядкой 2.2. Тексты ставятся по БАЗОВОЙ ЛИНИИ
+// (в макете это нижний край заглавных букв), поэтому положение не зависит от метрик шрифта.
+
+private val MsLight = Color(0xFFE2EEF7)       // обводки, перемычка шапки колонки, внешний контур текста
+private val MsDark = Color(0xFF545E67)        // тёмная подложка контролов и панели
+private val MsGray = Color(0xFFD8D8D8)        // невыбранная кнопка
+private val MsGrayHover = Color(0xFFE4E4E4)   // невыбранная кнопка под курсором
+private val MsTextOn = Color(0xFF1F70F5)      // текст выбранной кнопки / шапок колонок
+private val MsTextOff = Color(0xFF72A6FF)     // текст невыбранной кнопки
+private val MsStrokeOn = Color(0xFFE2EEF7)    // внешний контур текста на белом
+private val MsStrokeOff = Color(0xFFDBDFE3)   // внешний контур текста на сером
+
+private class MsText(val text: String, val cx: Float, val baseline: Float)
+
+/** Кнопка внутри контрола: x, y, w, h — относительно левого верха контрола. */
+private class MsOption(val x: Float, val y: Float, val w: Float, val h: Float, val texts: List<MsText>)
+
+/** Позиция колонки очков на макете (левый верх колонки 70×140 в координатах карточки). */
+private class MsColumnSpot(val x: Float, val y: Float)
+
+// Режим «до 3 партий» (страницы 1–2 макета): колонки 1, 2, ТБ; ТБ на макете приподнята на 2 px.
+private val MsSpots3 = listOf(MsColumnSpot(227f, 343f), MsColumnSpot(362f, 343f), null, null, MsColumnSpot(497f, 341f))
+
+// Режим «до 5 партий» (страница 3): колонки 1, 2, 3, 4, ТБ.
+private val MsSpots5 = listOf(
+    MsColumnSpot(192f, 342f), MsColumnSpot(275f, 342f), MsColumnSpot(362f, 342f),
+    MsColumnSpot(447f, 342f), MsColumnSpot(532f, 342f),
+)
+
+/** Две кнопки 15 / 25 в колонке (45×40, радиус 8). */
+private val MsValueOptions = listOf(
+    MsOption(12.5f, 46f, 45f, 40f, listOf(MsText("15", 34.6f, 73f))),
+    MsOption(12.5f, 91f, 45f, 40f, listOf(MsText("25", 34.6f, 118f))),
+)
+
+/**
+ * Текст как в Figma: заливка + внешний контур 1 px (штрих 2 px по центру, внутренняя половина
+ * перекрыта заливкой). Позиция — по центру [cx] и базовой линии [baseline] (px макета).
+ * [letterGap] > 0 — разрядка: символы рисуются по одному (не зависит от того, считает ли
+ * движок текста замыкающий интервал).
+ */
+@OptIn(ExperimentalTextApi::class)
+private fun DrawScope.msText(
+    measurer: TextMeasurer,
+    text: String,
+    style: TextStyle,
+    color: Color,
+    stroke: Color,
+    cx: Float,
+    baseline: Float,
+    letterGap: Float = 0f,
+) {
+    val u = density
+    val strokeStyle = Stroke(width = 2f * u, join = StrokeJoin.Round)
+    if (letterGap == 0f) {
+        val layout = measurer.measure(text, style)
+        val w = layout.getLineRight(0) - layout.getLineLeft(0)
+        val topLeft = Offset(cx * u - w / 2f, baseline * u - layout.firstBaseline)
+        drawText(layout, color = stroke, topLeft = topLeft, drawStyle = strokeStyle)
+        drawText(layout, color = color, topLeft = topLeft)
+    } else {
+        val layouts = text.map { measurer.measure(it.toString(), style) }
+        val widths = layouts.map { it.getLineRight(0) - it.getLineLeft(0) }
+        val total = widths.sum() + letterGap * u * (text.length - 1)
+        var x = cx * u - total / 2f
+        layouts.forEachIndexed { i, layout ->
+            val topLeft = Offset(x, baseline * u - layout.firstBaseline)
+            drawText(layout, color = stroke, topLeft = topLeft, drawStyle = strokeStyle)
+            drawText(layout, color = color, topLeft = topLeft)
+            x += widths[i] + letterGap * u
+        }
+    }
+}
+
+/** Плавное появление секции: прозрачность 0→1 и подъём на 10 px, с задержкой [delayMs]. */
+@Composable
+private fun rememberMsEnter(delayMs: Int): State<Float> {
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        progress.animateTo(1f, tween(260, delayMillis = delayMs, easing = FastOutSlowInEasing))
+    }
+    return progress.asState()
+}
+
+private fun Modifier.msEnter(progress: State<Float>): Modifier = graphicsLayer {
+    alpha = progress.value
+    translationY = (1f - progress.value) * 10f * density
+}
+
+/** Статичная подпись по базовой линии (заголовок и названия секций). */
+@OptIn(ExperimentalTextApi::class)
+@Composable
+private fun MsLabel(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    cx: Float,
+    baseline: Float,
+    modifier: Modifier = Modifier,
+) {
+    val measurer = rememberTextMeasurer()
+    Canvas(modifier.fillMaxSize()) {
+        msText(measurer, text, style, color, MsStrokeOn, cx, baseline)
+    }
+}
+
+/**
+ * Группа взаимоисключающих кнопок: серые плашки, белый «бегунок» выбранной (плавно переезжает
+ * пружиной), цвет текста перетекает серый→синий, нажатие — сжатие, наведение — подсветка.
+ * Координаты кнопок и текстов — относительно левого верха группы ([size]).
+ */
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalTextApi::class)
+@Composable
+private fun MsOptionGroup(
+    size: DpSize,
+    options: List<MsOption>,
+    selected: Int,
+    radius: Dp,
+    textStyle: TextStyle,
+    modifier: Modifier = Modifier,
+    letterGap: Float = 0f,
+    interactive: Boolean = true,
+    onSelect: (Int) -> Unit,
+) {
+    val measurer = rememberTextMeasurer()
+    val target = options[selected]
+    val slide = spring<Float>(dampingRatio = 0.74f, stiffness = 420f)
+    val thumbX by animateFloatAsState(target.x, slide, label = "msThumbX")
+    val thumbY by animateFloatAsState(target.y, slide, label = "msThumbY")
+
+    val sources = remember(options.size) { List(options.size) { MutableInteractionSource() } }
+    val on = options.indices.map { i ->
+        animateFloatAsState(if (i == selected) 1f else 0f, tween(200), label = "msOn$i").value
+    }
+    val pressed = sources.map { it.collectIsPressedAsState().value }
+    val hovered = sources.map { it.collectIsHoveredAsState().value }
+    val press = options.indices.map { i ->
+        animateFloatAsState(
+            targetValue = if (pressed[i]) 0.94f else 1f,
+            animationSpec = if (pressed[i]) tween(70) else spring(dampingRatio = 0.45f, stiffness = 500f),
+            label = "msPress$i",
+        ).value
+    }
+    val hover = options.indices.map { i ->
+        animateFloatAsState(if (hovered[i] && i != selected) 1f else 0f, tween(140), label = "msHover$i").value
+    }
+    val shape = RoundedCornerShape(radius)
+
+    Box(modifier.size(size)) {
+        // 1. серые плашки
+        options.forEachIndexed { i, o ->
+            Box(
+                Modifier.offset(o.x.dp, o.y.dp).size(o.w.dp, o.h.dp)
+                    .graphicsLayer { scaleX = press[i]; scaleY = press[i] }
+                    .clip(shape)
+                    .background(lerp(MsGray, MsGrayHover, hover[i])),
+            )
+        }
+        // 2. белый бегунок выбранной кнопки
+        Box(
+            Modifier.size(target.w.dp, target.h.dp)
+                .graphicsLayer {
+                    translationX = thumbX * density
+                    translationY = thumbY * density
+                    scaleX = press[selected]; scaleY = press[selected]
+                }
+                .clip(shape)
+                .background(Color.White),
+        )
+        // 3. тексты
+        Canvas(Modifier.fillMaxSize()) {
+            options.forEachIndexed { i, o ->
+                val color = lerp(MsTextOff, MsTextOn, on[i])
+                val stroke = lerp(MsStrokeOff, MsStrokeOn, on[i])
+                o.texts.forEach { t ->
+                    msText(measurer, t.text, textStyle, color, stroke, t.cx, t.baseline, letterGap)
+                }
+            }
+        }
+        // 4. зоны нажатия
+        if (interactive) {
+            options.forEachIndexed { i, o ->
+                Box(
+                    Modifier.offset(o.x.dp, o.y.dp).size(o.w.dp, o.h.dp)
+                        .hoverable(sources[i])
+                        .pointerHoverIcon(PointerIcon.Hand)
+                        .clickable(interactionSource = sources[i], indication = null) { onSelect(i) },
+                )
+            }
+        }
+    }
+}
+
+/** Колонка очков партии: рамка 70×140, шапка с номером, перемычка и две кнопки 15 / 25. */
+@OptIn(ExperimentalTextApi::class)
+@Composable
+private fun MsColumn(
+    label: String,
+    value: Int,
+    headerStyle: TextStyle,
+    valueStyle: TextStyle,
+    interactive: Boolean,
+    modifier: Modifier = Modifier,
+    onValue: (Int) -> Unit,
+) {
+    val measurer = rememberTextMeasurer()
+    val shape = RoundedCornerShape(20.5.dp)
+    Box(modifier.size(70.dp, 140.dp)) {
+        Box(Modifier.fillMaxSize().clip(shape).background(MsDark).border(5.dp, MsLight, shape))
+        Canvas(Modifier.fillMaxSize()) {
+            val u = density
+            // белая шапка 60×33 со скруглением 15.5 сверху
+            val header = Path().apply {
+                addRoundRect(
+                    RoundRect(
+                        left = 5f * u, top = 5f * u, right = 65f * u, bottom = 38f * u,
+                        topLeftCornerRadius = CornerRadius(15.5f * u),
+                        topRightCornerRadius = CornerRadius(15.5f * u),
+                        bottomRightCornerRadius = CornerRadius.Zero,
+                        bottomLeftCornerRadius = CornerRadius.Zero,
+                    ),
+                )
+            }
+            drawPath(header, Color.White)
+            // перемычка под шапкой — на всю ширину колонки, 5 px
+            drawRect(MsLight, topLeft = Offset(0f, 38f * u), size = Size(70f * u, 5f * u))
+            msText(measurer, label, headerStyle, MsTextOn, MsStrokeOn, 35f, 33f)
+        }
+        MsOptionGroup(
+            size = DpSize(70.dp, 140.dp),
+            options = MsValueOptions,
+            selected = if (value == 15) 0 else 1,
+            radius = 8.dp,
+            textStyle = valueStyle,
+            letterGap = 2.2f,
+            interactive = interactive,
+            onSelect = { onValue(if (it == 0) 15 else 25) },
+        )
+    }
+}
+
+/**
+ * Колонка, которая переезжает между раскладками «3 партии» ↔ «5 партий». Колонки 3 и 4 в режиме
+ * до 3 партий скрыты: при переключении они проявляются на своих местах, остальные расходятся.
+ */
+@Composable
+private fun MsAnimatedColumn(
+    spot3: MsColumnSpot?,
+    spot5: MsColumnSpot,
+    five: Boolean,
+    label: String,
+    value: Int,
+    headerStyle: TextStyle,
+    valueStyle: TextStyle,
+    enter: State<Float>,
+    onValue: (Int) -> Unit,
+) {
+    val visible = five || spot3 != null
+    val spot = if (five) spot5 else (spot3 ?: spot5)
+    val move = spring<Float>(dampingRatio = 0.82f, stiffness = 330f)
+    val x by animateFloatAsState(spot.x, move, label = "msColX")
+    val y by animateFloatAsState(spot.y, move, label = "msColY")
+    val appear by animateFloatAsState(if (visible) 1f else 0f, tween(240), label = "msColAlpha")
+    if (visible || appear > 0.01f) {
+        MsColumn(
+            label = label,
+            value = value,
+            headerStyle = headerStyle,
+            valueStyle = valueStyle,
+            interactive = visible,
+            modifier = Modifier
+                .msEnter(enter)
+                .graphicsLayer {
+                    translationX = x * density
+                    translationY = y * density
+                    alpha = appear
+                    val s = 0.88f + 0.12f * appear
+                    scaleX = s; scaleY = s
+                },
+            onValue = onValue,
+        )
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun VolleyballSettingsDialog(
     settings: VolleyballMatchSettings,
@@ -1098,11 +1397,9 @@ private fun VolleyballSettingsDialog(
         val russian = language == AppLanguage.RU
 
         fun changeSetCount(count: Int) {
-            val points = draft.setPoints.toMutableList()
             draft = draft.copy(
-                preset = volleyballPresetFor(count, points),
+                preset = volleyballPresetFor(count, draft.setPoints),
                 setCount = count,
-                setPoints = points,
             )
         }
 
@@ -1115,198 +1412,125 @@ private fun VolleyballSettingsDialog(
             )
         }
 
+        fun selectPreset(index: Int) {
+            draft = when (index) {
+                0 -> VolleyballMatchSettings(VolleyballPreset.SHORT, 3, listOf(15, 15, 15, 25, 15))
+                1 -> VolleyballMatchSettings(VolleyballPreset.LONG, 5, listOf(25, 25, 25, 25, 15))
+                else -> draft.copy(preset = VolleyballPreset.CUSTOM)
+            }
+        }
+
+        val title32 = type.teamLabel.copy(fontSize = 32.sp)
+        val label23 = type.teamLabel.copy(fontSize = 23.sp)
+        val preset19 = type.teamLabel.copy(fontSize = 19.sp)
+        val sets20 = type.teamLabel.copy(fontSize = 20.sp)
+        val value20 = type.teamLabel.copy(fontSize = 20.sp)
+
+        val presetTexts = if (russian) {
+            listOf("КОРОТКАЯ" to "ИГРА", "ДЛИННАЯ" to "ИГРА", "СВОЯ" to "ИГРА")
+        } else {
+            listOf("SHORT" to "GAME", "LONG" to "GAME", "CUSTOM" to "GAME")
+        }
+        val presetOptions = presetTexts.mapIndexed { i, (l1, l2) ->
+            val x = 10f + 135f * i
+            MsOption(
+                x, 10f, 130f, 45f,
+                listOf(MsText(l1, x + 65f, 28f), MsText(l2, x + 65f, 52f)),
+            )
+        }
+        val setsOptions = listOf(
+            MsOption(12f, 10f, 130f, 45f, listOf(MsText(if (russian) "3 ПАРТИИ" else "3 SETS", 77f, 40f))),
+            MsOption(154f, 10f, 130f, 45f, listOf(MsText(if (russian) "5 ПАРТИЙ" else "5 SETS", 219f, 40f))),
+        )
+
+        val eTitle = rememberMsEnter(0)
+        val ePresets = rememberMsEnter(50)
+        val eSets = rememberMsEnter(100)
+        val ePoints = rememberMsEnter(150)
+        val eDone = rememberMsEnter(200)
+
         MatchDialogScaffold(cardHeight = 612.dp, onBack = onBack, outerGlass = true) {
-            FigmaText(
+            // Заголовок
+            MsLabel(
                 if (russian) "НАСТРОЙ СВОЙ МАТЧ" else "SET UP YOUR MATCH",
-                type.cardTitle.copy(fontSize = 30.sp, lineHeight = 36.sp),
-                colors.headingBlue,
-                Modifier.offset(0.dp, 27.dp), TextAlign.Center, 794.dp,
+                title32, colors.headingBlue, cx = 396.5f, baseline = 62f,
+                modifier = Modifier.msEnter(eTitle),
             )
 
-            FigmaText(
+            // Пресеты
+            MsLabel(
                 if (russian) "ПРЕСЕТЫ" else "PRESETS",
-                type.teamLabel.copy(fontSize = 22.sp, lineHeight = 26.sp),
-                colors.headingBlue,
-                Modifier.offset(0.dp, 78.dp), TextAlign.Center, 794.dp,
+                label23, colors.headingBlue, cx = 389f, baseline = 109f,
+                modifier = Modifier.msEnter(ePresets),
             )
-            Row(
-                Modifier.offset(197.dp, 116.dp).size(400.dp, 58.dp)
-                    .clip(RoundedCornerShape(18.dp)).background(Color(0xFF59646E))
-                    .border(3.dp, Color(0xFFE3F0F7), RoundedCornerShape(18.dp))
-                    .padding(5.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                MatchSettingsSegment(
-                    if (russian) "КОРОТКАЯ\nИГРА" else "SHORT\nGAME",
-                    selected = draft.preset == VolleyballPreset.SHORT,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    onClick = {
-                        draft = VolleyballMatchSettings(
-                            preset = VolleyballPreset.SHORT,
-                            setCount = 3,
-                            setPoints = listOf(15, 15, 15, 25, 15),
-                        )
-                    },
-                )
-                MatchSettingsSegment(
-                    if (russian) "ДЛИННАЯ\nИГРА" else "LONG\nGAME",
-                    selected = draft.preset == VolleyballPreset.LONG,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    onClick = {
-                        draft = VolleyballMatchSettings(
-                            preset = VolleyballPreset.LONG,
-                            setCount = 5,
-                            setPoints = listOf(25, 25, 25, 25, 15),
-                        )
-                    },
-                )
-                MatchSettingsSegment(
-                    if (russian) "СВОЯ\nИГРА" else "CUSTOM\nGAME",
-                    selected = draft.preset == VolleyballPreset.CUSTOM,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    onClick = { draft = draft.copy(preset = VolleyballPreset.CUSTOM) },
+            Box(Modifier.offset(183.dp, 115.dp).size(420.dp, 65.dp).msEnter(ePresets)) {
+                val shape = RoundedCornerShape(20.dp)
+                Box(Modifier.fillMaxSize().clip(shape).background(MsDark).border(5.dp, MsLight, shape))
+                MsOptionGroup(
+                    size = DpSize(420.dp, 65.dp),
+                    options = presetOptions,
+                    selected = draft.preset.ordinal,
+                    radius = 12.dp,
+                    textStyle = preset19,
+                    onSelect = { selectPreset(it) },
                 )
             }
 
-            FigmaText(
+            // Количество партий
+            MsLabel(
                 if (russian) "КОЛИЧЕСТВО ПАРТИЙ" else "NUMBER OF SETS",
-                type.teamLabel.copy(fontSize = 22.sp, lineHeight = 26.sp),
-                colors.headingBlue,
-                Modifier.offset(0.dp, 181.dp), TextAlign.Center, 794.dp,
+                label23, colors.headingBlue, cx = 396.5f, baseline = 212f,
+                modifier = Modifier.msEnter(eSets),
             )
-            Row(
-                Modifier.offset(252.dp, 222.dp).size(290.dp, 58.dp)
-                    .clip(RoundedCornerShape(18.dp)).background(Color(0xFF59646E))
-                    .border(3.dp, Color(0xFFE3F0F7), RoundedCornerShape(18.dp))
-                    .padding(5.dp),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                MatchSettingsSegment(
-                    if (russian) "3 ПАРТИИ" else "3 SETS",
-                    selected = draft.setCount == 3,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    onClick = { changeSetCount(3) },
-                )
-                MatchSettingsSegment(
-                    if (russian) "5 ПАРТИЙ" else "5 SETS",
-                    selected = draft.setCount == 5,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    onClick = { changeSetCount(5) },
+            Box(Modifier.offset(249.dp, 219.dp).size(295.dp, 65.dp).msEnter(eSets)) {
+                val shape = RoundedCornerShape(20.dp)
+                Box(Modifier.fillMaxSize().clip(shape).background(MsDark).border(5.dp, MsLight, shape))
+                MsOptionGroup(
+                    size = DpSize(295.dp, 65.dp),
+                    options = setsOptions,
+                    selected = if (draft.setCount == 3) 0 else 1,
+                    radius = 10.dp,
+                    textStyle = sets20,
+                    onSelect = { changeSetCount(if (it == 0) 3 else 5) },
                 )
             }
 
-            FigmaText(
+            // Количество очков в каждой партии
+            MsLabel(
                 if (russian) "КОЛИЧЕСТВО ОЧКОВ В КАЖДОЙ ПАРТИИ" else "POINTS IN EACH SET",
-                type.teamLabel.copy(fontSize = 22.sp, lineHeight = 26.sp),
-                colors.headingBlue,
-                Modifier.offset(0.dp, 294.dp), TextAlign.Center, 794.dp,
+                label23, colors.headingBlue, cx = 396.5f, baseline = 316f,
+                modifier = Modifier.msEnter(ePoints),
             )
-            Row(
-                Modifier.offset(164.dp, 326.dp).size(466.dp, 175.dp)
-                    .clip(RoundedCornerShape(19.dp)).background(Color(0xFF56616B))
-                    .border(4.dp, Color(0xFFDCEAF2), RoundedCornerShape(19.dp))
-                    .padding(horizontal = 18.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val visibleSetIndexes = if (draft.setCount == 3) listOf(0, 1, 2) else listOf(0, 1, 2, 3, 4)
-                visibleSetIndexes.forEach { pointIndex ->
-                    MatchSetPointsColumn(
-                        label = if (pointIndex == draft.setCount - 1) { if (russian) "ТБ" else "TB" }
-                            else "${pointIndex + 1}",
-                        selectedPoints = draft.setPoints[pointIndex],
-                        modifier = Modifier.width(68.dp),
-                        onSelect = { value -> changeSetPoints(pointIndex, value) },
-                    )
-                }
+            run {
+                val shape = RoundedCornerShape(20.dp)
+                Box(
+                    Modifier.offset(166.dp, 322.dp).size(462.dp, 180.dp).msEnter(ePoints)
+                        .clip(shape).background(MsDark).border(5.dp, MsLight, shape),
+                )
+            }
+            val five = draft.setCount == 5
+            val labels = listOf("1", "2", "3", "4", if (russian) "ТБ" else "TB")
+            for (index in 0..4) {
+                MsAnimatedColumn(
+                    spot3 = MsSpots3[index],
+                    spot5 = MsSpots5[index],
+                    five = five,
+                    label = labels[index],
+                    value = draft.setPoints[index],
+                    headerStyle = title32,
+                    valueStyle = value20,
+                    enter = ePoints,
+                    onValue = { changeSetPoints(index, it) },
+                )
             }
 
+            // Готово
             DoneButton(
                 text = strings.done,
                 usePathText = language == AppLanguage.RU,
                 onClick = { onConfirm(draft) },
-                modifier = Modifier.offset(308.dp, 524.dp),
+                modifier = Modifier.offset(308.dp, 539.dp).msEnter(eDone),
             )
-        }
-    }
-}
-
-@Composable
-private fun MatchSettingsSegment(
-    text: String,
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    val type = ScoreKeeperTheme.typography
-    Box(
-        modifier.clip(RoundedCornerShape(11.dp))
-            .background(if (selected) Color.White else Color(0xFFD5D5D5))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        BasicText(
-            text,
-            style = type.teamLabel.copy(
-                fontSize = 18.sp,
-                lineHeight = 20.sp,
-                color = if (selected) Color(0xFF2070F5) else Color(0xFF74C0FC),
-                textAlign = TextAlign.Center,
-            ),
-            maxLines = 2,
-            softWrap = false,
-        )
-    }
-}
-
-@Composable
-private fun MatchSetPointsColumn(
-    label: String,
-    selectedPoints: Int,
-    modifier: Modifier = Modifier,
-    onSelect: (Int) -> Unit,
-) {
-    val type = ScoreKeeperTheme.typography
-    Column(
-        modifier.height(142.dp)
-            .clip(RoundedCornerShape(17.dp))
-            .background(Color(0xFF56616B))
-            .border(4.dp, Color(0xFFDCEAF2), RoundedCornerShape(17.dp))
-            .padding(3.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Box(
-            Modifier.fillMaxWidth().height(29.dp)
-                .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
-                .background(Color.White),
-            contentAlignment = Alignment.Center,
-        ) {
-            BasicText(
-                label,
-                style = type.teamLabel.copy(fontSize = 23.sp, color = Color(0xFF2070F5)),
-                maxLines = 1,
-            )
-        }
-        listOf(15, 25).forEach { value ->
-            Box(
-                Modifier.fillMaxWidth().weight(1f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (selectedPoints == value) Color.White else Color(0xFFD5D5D5))
-                    .clickable { onSelect(value) },
-                contentAlignment = Alignment.Center,
-            ) {
-                BasicText(
-                    value.toString(),
-                    style = type.teamLabel.copy(
-                        fontSize = 21.sp,
-                        color = if (selectedPoints == value) Color(0xFF2070F5) else Color(0xFF74C0FC),
-                    ),
-                    maxLines = 1,
-                )
-            }
         }
     }
 }
