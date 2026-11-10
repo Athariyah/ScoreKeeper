@@ -227,7 +227,8 @@ val DarkColors = ScoreKeeperColors(
 )
 
 // ───────────────────────── Шрифты и типографика ─────────────────────────
-// Положите .ttf в frontend/src/main/resources/fonts/ с ТОЧНО такими именами.
+// Положите .ttf в frontend/src/main/resources/fonts/ с ТОЧНО такими именами:
+//   ClearSans-Bold.ttf, AqumTwo-Classic.ttf, BloggerSans-Medium.ttf, BlueCurve-Bold.ttf.
 // Если файла нет, приложение не падает, а берёт системный шрифт.
 
 private fun resourceExists(path: String): Boolean =
@@ -235,6 +236,8 @@ private fun resourceExists(path: String): Boolean =
 
 private val clearSansLoaded = resourceExists("fonts/ClearSans-Bold.ttf")
 private val aqumLoaded = resourceExists("fonts/AqumTwo-Classic.ttf")
+private val bloggerLoaded = resourceExists("fonts/BloggerSans-Medium.ttf")
+private val blueCurveLoaded = resourceExists("fonts/BlueCurve-Bold.ttf")
 
 private val ClearSans: FontFamily =
     if (clearSansLoaded) FontFamily(Font("fonts/ClearSans-Bold.ttf", FontWeight.Bold))
@@ -242,6 +245,16 @@ private val ClearSans: FontFamily =
 
 private val AqumTwo: FontFamily =
     if (aqumLoaded) FontFamily(Font("fonts/AqumTwo-Classic.ttf", FontWeight.Normal))
+    else FontFamily.SansSerif
+
+/** Blogger Sans Medium — подпись «Esc» на клавише в экране «ХОТКЕИ». */
+val BloggerSans: FontFamily =
+    if (bloggerLoaded) FontFamily(Font("fonts/BloggerSans-Medium.ttf", FontWeight.Medium))
+    else FontFamily.SansSerif
+
+/** Blue Curve Bold — цифры счёта (очки/партии) и поля корректировки, 32 sp (см. scoreDigits). */
+val BlueCurve: FontFamily =
+    if (blueCurveLoaded) FontFamily(Font("fonts/BlueCurve-Bold.ttf", FontWeight.Bold))
     else FontFamily.SansSerif
 
 /** Системный Arial — шрифт табло для зрителей (экран предпросмотра). Если Arial
@@ -261,6 +274,7 @@ class ScoreKeeperTypography(
     val caption: TextStyle,     // «РАЗРАБОТАНО ДЛЯ СПОРТИВНОЙ КОМИССИИ»
     val doneButton: TextStyle,  // «ГОТОВО»
     val field: TextStyle,       // текст в полях ввода
+    val scoreDigits: TextStyle, // цифры очков/партий и полей корректировки — Blue Curve Bold 32
 )
 
 val DefaultTypography = ScoreKeeperTypography(
@@ -300,6 +314,7 @@ val DefaultTypography = ScoreKeeperTypography(
         fontSize = 31.sp,
     ),
     field = TextStyle(fontFamily = AqumTwo, fontSize = 20.sp),
+    scoreDigits = TextStyle(fontFamily = BlueCurve, fontWeight = FontWeight.Bold, fontSize = 32.sp),
 )
 
 // ───────────────────────── Язык интерфейса ─────────────────────────
@@ -344,6 +359,11 @@ class AppStrings(
     val setsLabel: String,
     val courtSideLabel: String,
     val winnerLabel: String,
+    // Предупреждение о закрытии матча («ВЫ УВЕРЕНЫ?»)
+    val areYouSure: String,
+    val closeWarningLine1: String,
+    val closeWarningLine2: String,
+    val closeWarningLine3: String, // красная строка («СБРОШЕН»)
 )
 
 val RuStrings = AppStrings(
@@ -382,6 +402,10 @@ val RuStrings = AppStrings(
     setsLabel = "ПАРТИИ",
     courtSideLabel = "СТОРОНА ПОЛЯ\nПОДАЮЩЕЙ КОМАНДЫ",
     winnerLabel = "ПОБЕДИТЕЛЬ",
+    areYouSure = "ВЫ УВЕРЕНЫ?",
+    closeWarningLine1 = "ЕСЛИ ВЫ ПОДТВЕРДИТЕ",
+    closeWarningLine2 = "ЗАКРЫТИЕ МАТЧА, ТО СЧЁТ БУДЕТ",
+    closeWarningLine3 = "СБРОШЕН",
 )
 
 val EnStrings = AppStrings(
@@ -420,6 +444,10 @@ val EnStrings = AppStrings(
     setsLabel = "SETS",
     courtSideLabel = "SERVING TEAM'S\nCOURT SIDE",
     winnerLabel = "WINNER",
+    areYouSure = "ARE YOU SURE?",
+    closeWarningLine1 = "IF YOU CONFIRM",
+    closeWarningLine2 = "CLOSING THE MATCH, THE SCORE WILL BE",
+    closeWarningLine3 = "RESET",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings =

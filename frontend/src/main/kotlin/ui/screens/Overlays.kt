@@ -66,7 +66,9 @@ import androidx.compose.ui.unit.dp
 import ui.components.LanguageSwitch
 import ui.components.ThemeSwitch
 import ui.components.drawBlurredRoundRect
+import ui.hotkeys.HotKey
 import ui.hotkeys.RegisterHotkeyLayer
+import ui.hotkeys.rememberHotkeyPress
 import ui.hotkeys.trackTyping
 import ui.theme.AppLanguage
 import ui.theme.DesignStage
@@ -183,7 +185,9 @@ private const val BACK_ARROW_PATH = "M41.3332 28H14.6665M24.6665 18L14.6665 28L2
 internal fun BackArrowButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    val pressed by interaction.collectIsPressedAsState()
+    val mousePressed by interaction.collectIsPressedAsState()
+    val hkPress = rememberHotkeyPress(HotKey.ESC)
+    val pressed = mousePressed || hkPress > 0.5f
     val hover = animateFloatAsState(
         targetValue = if (hovered) 1f else 0f,
         animationSpec = spring(dampingRatio = 0.55f, stiffness = 350f),
@@ -192,7 +196,7 @@ internal fun BackArrowButton(onClick: () -> Unit, modifier: Modifier = Modifier)
     val pressSpec: AnimationSpec<Float> =
         if (pressed) tween(70) else spring(dampingRatio = 0.45f, stiffness = 500f)
     val press = animateFloatAsState(
-        targetValue = if (pressed) 1f else 0f,
+        targetValue = if (mousePressed) 1f else hkPress,
         animationSpec = pressSpec,
         label = "backPress",
     )
@@ -479,7 +483,9 @@ internal fun DoneButton(
     val type = ScoreKeeperTheme.typography
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    val pressed by interaction.collectIsPressedAsState()
+    val mousePressed by interaction.collectIsPressedAsState()
+    val hkPress = rememberHotkeyPress(HotKey.ENTER)
+    val pressed = mousePressed || hkPress > 0.5f
     val hover = animateFloatAsState(
         targetValue = if (hovered) 1f else 0f,
         animationSpec = spring(dampingRatio = 0.6f, stiffness = 300f),
@@ -488,7 +494,7 @@ internal fun DoneButton(
     val pressSpec: AnimationSpec<Float> =
         if (pressed) tween(80) else spring(dampingRatio = 0.45f, stiffness = 500f)
     val press = animateFloatAsState(
-        targetValue = if (pressed) 1f else 0f,
+        targetValue = if (mousePressed) 1f else hkPress,
         animationSpec = pressSpec,
         label = "donePress",
     )
