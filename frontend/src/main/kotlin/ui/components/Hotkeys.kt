@@ -72,12 +72,6 @@ enum class HotkeyId {
 /** Колонка подсказок: Match — «КНОПКИ МАТЧА», Main — «ОСНОВНЫЕ». */
 enum class HotkeyGroup { Match, Main }
 
-/** Что нарисовано внутри «колпашки» клавиши. */
-enum class KeyGlyph {
-    Digit1, Digit2, Minus, Correction, Reset, EnterWide,
-    LetterH, Esc, Tilde, F1, F2, EnterSmall,
-}
-
 /**
  * Мигающая подсветка нажатой клавиши: окно подсказок получает [pulse] и подсвечивает
  * нужную строку. Живёт в отдельном классе (не в CompositionLocal), чтобы состояние

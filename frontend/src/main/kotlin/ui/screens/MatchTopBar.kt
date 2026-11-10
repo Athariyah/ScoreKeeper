@@ -93,7 +93,7 @@ private const val BACK_PILL_PATH =
     "M465.5 0 L589.5 0 C604.14 0 616 11.86 616 26.5 C616 41.14 604.14 53 589.5 53 L465.5 53 " +
         "C450.86 53 439 41.14 439 26.5 C439 11.86 450.86 0 465.5 0"
 
-private const val BACK_ARROW_PATH =
+private const val TOP_BAR_ARROW_PATH =
     "M498.5 27 L476.5 27 M484.75 19 L476.5 27 L484.75 35"
 
 /** Полоса целиком: рисуется и как отдельный элемент, и как оверлей поверх матча. */
@@ -127,7 +127,7 @@ internal fun MatchTopBar(
     val cogSpan = remember { PathParser().parsePathString(COG_PATH).toPath() }
     val cogCircle = remember { PathParser().parsePathString(COG_CIRCLE_PATH).toPath() }
     val backPill = remember { PathParser().parsePathString(BACK_PILL_PATH).toPath() }
-    val backArrow = remember { PathParser().parsePathString(BACK_ARROW_PATH).toPath() }
+    val backArrow = remember { PathParser().parsePathString(TOP_BAR_ARROW_PATH).toPath() }
     val chipPill = remember { PathParser().parsePathString(CHIP_PILL_PATH).toPath() }
     // вспышки пилюли «ХОТКЕИ» и шестерёнки при нажатии H/Esc/~/F1/F2
     val chipFlash = rememberHotkeyFlash(
