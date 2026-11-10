@@ -1120,6 +1120,10 @@ private fun ServeCoin(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val scale = rememberPressScale(interaction)
+    // Цвет кольца берём в композиции: внутри Canvas @Composable-обращений быть не может.
+    val ringColor = coinRing(ScoreKeeperTheme.colors)
+    // Внутри Canvas имя `size` занято DrawScope.size, поэтому диаметр считаем заранее.
+    val coinDp = size
     Box(
         modifier.size(size)
             .graphicsLayer { scaleX = scale; scaleY = scale }
@@ -1135,12 +1139,12 @@ private fun ServeCoin(
         // Кольцо на PNG светло-голубое (#9EC8E2). В тёмной теме макет требует #22314A,
         // поэтому поверх картинки (в той же полосе 0.46…0.50 радиуса) рисуем своё кольцо.
         Canvas(Modifier.fillMaxSize()) {
-            val r = size.minDimension
+            val d = coinDp.toPx()
             drawCircle(
-                color = coinRing(ScoreKeeperTheme.colors),
-                radius = r * 0.48f,
-                center = Offset(r / 2f, r / 2f),
-                style = Stroke(width = r * 0.041f),
+                color = ringColor,
+                radius = d * 0.48f,
+                center = Offset(d / 2f, d / 2f),
+                style = Stroke(width = d * 0.041f),
             )
         }
     }
