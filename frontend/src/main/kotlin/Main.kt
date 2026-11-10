@@ -1242,61 +1242,45 @@ private fun NumPillField(
 private fun MatchDialogScaffold(
     cardHeight: Dp,
     onBack: () -> Unit,
-    outerGlass: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val colors = ScoreKeeperTheme.colors
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, tween(160)) }
-    Box(
-        Modifier.fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.52f * appear.value))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) { /* клики по затемнению не проходят в экран */ },
-    ) {
-        Box(Modifier.align(Alignment.Center).requiredSize(1920.dp, 1080.dp)) {
-            if (outerGlass) {
+    DesignStage {
+        Box(
+            Modifier.fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.52f * appear.value))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) { /* клики по затемнению не проходят в экран */ },
+        ) {
+            Box(Modifier.align(Alignment.Center).requiredSize(1920.dp, 1080.dp)) {
                 Box(
-                    Modifier.align(Alignment.Center).offset(y = 24.dp).size(1002.dp, 802.dp)
+                    Modifier.align(Alignment.Center).size(794.dp, cardHeight)
+                        .graphicsLayer {
+                            val s = 0.97f + 0.03f * appear.value
+                            scaleX = s; scaleY = s; alpha = appear.value
+                        }
                         .drawBehind {
                             drawBlurredRoundRect(
                                 topLeft = Offset.Zero,
                                 size = size,
-                                corner = 40.dp.toPx(),
-                                color = Color.Black.copy(alpha = 0.20f),
-                                sigma = 35.dp.toPx(),
+                                corner = 50.dp.toPx(),
+                                color = Color.Black.copy(alpha = 0.25f),
+                                sigma = 40.9.dp.toPx(),
                             )
                         }
-                        .clip(RoundedCornerShape(40.dp))
-                        .background(colors.glassFill)
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(40.dp)),
-                )
-            }
-            Box(
-                Modifier.align(Alignment.Center).size(794.dp, cardHeight)
-                    .graphicsLayer {
-                        val s = 0.97f + 0.03f * appear.value
-                        scaleX = s; scaleY = s; alpha = appear.value
-                    }
-                    .drawBehind {
-                        drawBlurredRoundRect(
-                            topLeft = Offset.Zero,
-                            size = size,
-                            corner = 50.dp.toPx(),
-                            color = Color.Black.copy(alpha = 0.25f),
-                            sigma = 40.9.dp.toPx(),
-                        )
-                    }
-                    .clip(RoundedCornerShape(50.dp))
-                    .background(colors.cardSurface),
-            ) {
-                content()
-                BackArrowButton(
-                    onBack,
-                    Modifier.align(Alignment.TopEnd).offset(x = (-25).dp, y = 25.dp),
-                )
+                        .clip(RoundedCornerShape(50.dp))
+                        .background(colors.cardSurface),
+                ) {
+                    content()
+                    BackArrowButton(
+                        onBack,
+                        Modifier.align(Alignment.TopEnd).offset(x = (-25).dp, y = 25.dp),
+                    )
+                }
             }
         }
     }
@@ -1666,7 +1650,7 @@ private fun VolleyballSettingsDialog(
         val ePoints = rememberMsEnter(150)
         val eDone = rememberMsEnter(200)
 
-        MatchDialogScaffold(cardHeight = 612.dp, onBack = onBack, outerGlass = true) {
+        MatchDialogScaffold(cardHeight = 612.dp, onBack = onBack) {
             // Заголовок
             MsLabel(
                 if (russian) "НАСТРОЙ СВОЙ МАТЧ" else "SET UP YOUR MATCH",
