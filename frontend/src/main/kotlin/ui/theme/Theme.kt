@@ -74,6 +74,32 @@ class ScoreKeeperColors(
     val logoPlaceholder: Color, // серый круг, когда лого не загружено
     val previewBorder: Color,   // обводка панели предпросмотра
     val outlineSoft: Color,     // мягкая обводка (пилюля «НАЗАД»)
+    // Заголовки и подписи в оверлеях/диалогах (в тёмной теме ярче, чем акцент на экране матча)
+    val overlayHeading: Color,
+    val textStroke: Color,      // внешний контур текста «как в Figma»
+    val langUnselected: Color,  // неактивный язык в переключателе
+    // Верхняя панель экрана матча: хоткеи, таймер, настройки, «НАЗАД»
+    val barPill: Color,         // фон пилюли «ХОТКЕИ»
+    val barBackFill: Color,     // фон пилюли «НАЗАД»
+    val barBackBorder: Color,
+    val barDivider: Color,
+    val barFg: Color,           // «ХОТКЕИ», таймер
+    val barFgStrong: Color,     // стрелка «НАЗАД»
+    val barText: Color,         // подпись «НАЗАД»
+    // Кнопка «назад» в оверлеях
+    val backFill: Color,
+    val backRing: Color,
+    val backArrow: Color,
+    // Кнопки экрана матча
+    val outlineGlow: Color,     // свечение контурных кнопок (СБРОС / ОТКАТ / КОРРЕКТИРОВКА)
+    val mainButtonStart: Color, // главная кнопка («ЗАВЕРШИТЬ МАТЧ»): цвет слева-внизу
+    val mainButtonEnd: Color,   // …и справа-вверху
+    val mainButtonGlow: Color,
+    val onMainButton: Color,
+    // Рамка предпросмотра табло
+    val frameStart: Color,
+    val frameEnd: Color,
+    val frameGlow: Color,
 )
 
 /** Светлая тема (по умолчанию). Тёмная — DarkColors ниже. */
@@ -113,31 +139,56 @@ val LightColors = ScoreKeeperColors(
     logoPlaceholder = Color(0xFFDDDDDD),
     previewBorder = Color(0xFFBBDAEE),
     outlineSoft = Color(0xFFC9D8E8),
+    overlayHeading = Color(0xFF2070F5),
+    textStroke = Color(0xFFE2EEF7),
+    langUnselected = Color(0xFFBCBCBC),
+    barPill = Color(0xFFE6F3FD),
+    barBackFill = Color(0xFFFBFCFD),
+    barBackBorder = Color(0xFFE3F0F9),
+    barDivider = Color(0xFFE2EEF7),
+    barFg = Color(0xFF465B72),
+    barFgStrong = Color(0xFF06326D),
+    barText = Color(0xFF21386A),
+    backFill = Color.White,
+    backRing = Color(0xFFE3F0F9),
+    backArrow = Color(0xFF06326D),
+    outlineGlow = Color(0x852171F4),
+    mainButtonStart = Color(0xFF1D6FF7),
+    mainButtonEnd = Color(0xFF6B8EC7),
+    mainButtonGlow = Color(0xFF2171F4),
+    onMainButton = Color.White,
+    frameStart = Color(0xFFCFE6F5),
+    frameEnd = Color(0xFF81B6D6),
+    frameGlow = Color(0xFF91C0DC),
 )
 
-/** Тёмная тема: тот же фирменный синий и яркие овалы, но на тёмно-синем фоне. */
+/**
+ * Тёмная тема. Палитра снята с векторного макета Export1.pdf:
+ * фон #141F31, обводки/разделители #22314A, золотой акцент #DFAF24 (в оверлеях ярче — #FFC300),
+ * вторичный текст #B9C6D8. Зелёные «+1»/«ГОТОВО» и синие кнопки меню остаются фирменными.
+ */
 val DarkColors = ScoreKeeperColors(
-    canvas = Color(0xFF0B1220),
-    glassFill = Color(0x73141E33),          // тёмно-синее «стекло», 45%
-    glassBorder = Color(0x334A6CA8),
-    buttonStart = Color(0xFF1D6FF7),
+    canvas = Color(0xFF141F31),
+    glassFill = Color(0x33FFF8D1),          // меню: rgba(255,248,209,0.20), как в макете
+    glassBorder = Color(0x1CAAA6A6),        // rgba(170,166,166,0.11)
+    buttonStart = Color(0xFF1D6FF7),        // кнопки меню остаются синими
     buttonEnd = Color(0xFF6B8EC7),
     buttonGlow = Color(0xFF2171F4),
     onButton = Color.White,
-    iconButtonBg = Color(0xFF1D2A42),
-    iconButtonBgHover = Color(0xFF27395C),
-    iconButtonFg = Color(0xFFDCE6FF),
-    titleTop = Color(0xFFF2F6FF),
-    titleBottom = Color(0xFF7C9BFF),
-    titleGlow = Color(0xFF2171F4),
-    logoTop = Color(0xFF03020A),
+    iconButtonBg = Color(0xFF141F31),
+    iconButtonBgHover = Color(0xFF22314A),
+    iconButtonFg = Color(0xFFDFAF24),
+    titleTop = Color.White,
+    titleBottom = Color.White,
+    titleGlow = Color(0xFF8E8FCE),
+    logoTop = Color(0xFF0A0227),
     logoBottom = Color(0xFF0F0F7F),
     logoDigits = Color(0xFFDCB422),
-    chipBg = Color(0xFF1D2A42),
-    chipText = Color(0xFFE8EEF9),
+    chipBg = Color(0xFF141F31),
+    chipText = Color(0xFFB9C6D8),
     cardSurface = Color(0xFF141F31),
     cardBorder = Color(0xFF22314A),
-    headingBlue = Color(0xFF6FA8FF),
+    headingBlue = Color(0xFFDFAF24),
     divider = Color(0xFF22314A),
     fieldBg = Color(0xFF2A3B57),
     fieldText = Color.White,
@@ -145,17 +196,39 @@ val DarkColors = ScoreKeeperColors(
     captionText = Color(0xFFB9C6D8),
     doneButtonBg = Color(0xFF69DB7C),
     onDoneButton = Color(0xFF343F4B),
-    pillBg = Color(0xFF1E2E47),
-    pillText = Color(0xFFC7D6EA),
-    headingText = Color(0xFFEAF2FC),
-    subText = Color(0xFF9FB4CC),
-    logoPlaceholder = Color(0xFF2A3B57),
-    previewBorder = Color(0xFF2E4A6E),
-    outlineSoft = Color(0xFF33465F),
+    pillBg = Color(0xFF22314A),
+    pillText = Color(0xFFB9C6D8),
+    headingText = Color(0xFFB9C6D8),
+    subText = Color(0xFFCBCCCD),
+    logoPlaceholder = Color(0xFFD9D9D9),
+    previewBorder = Color(0xFF22314A),
+    outlineSoft = Color(0xFF212E44),
+    overlayHeading = Color(0xFFFFC300),
+    textStroke = Color(0xFF22314A),
+    langUnselected = Color(0xFFB9C6D8),
+    barPill = Color(0xFF141F31),
+    barBackFill = Color(0xFF141F31),
+    barBackBorder = Color(0xFF212E44),
+    barDivider = Color(0xFF212E44),
+    barFg = Color(0xFFDFAF24),
+    barFgStrong = Color(0xFFDFAF24),
+    barText = Color(0xFFDFAF24),
+    backFill = Color(0xFF141F31),
+    backRing = Color(0xFF22314A),
+    backArrow = Color(0xFFFFC300),
+    outlineGlow = Color(0x55DFAF24),
+    mainButtonStart = Color(0xFFE1BE5A),
+    mainButtonEnd = Color(0xFFDFB026),
+    mainButtonGlow = Color(0x66DFAF24),
+    onMainButton = Color(0xFF141F31),
+    frameStart = Color(0xFFFFE07A),
+    frameEnd = Color(0xFFFFC300),
+    frameGlow = Color(0xFFFFC300),
 )
 
 // ───────────────────────── Шрифты и типографика ─────────────────────────
-// Положите .ttf в frontend/src/main/resources/fonts/ с ТОЧНО такими именами.
+// Положите .ttf в frontend/src/main/resources/fonts/ с ТОЧНО такими именами:
+//   ClearSans-Bold.ttf, AqumTwo-Classic.ttf, BloggerSans-Medium.ttf, BlueCurve-Bold.ttf.
 // Если файла нет, приложение не падает, а берёт системный шрифт.
 
 private fun resourceExists(path: String): Boolean =
@@ -163,6 +236,8 @@ private fun resourceExists(path: String): Boolean =
 
 private val clearSansLoaded = resourceExists("fonts/ClearSans-Bold.ttf")
 private val aqumLoaded = resourceExists("fonts/AqumTwo-Classic.ttf")
+private val bloggerLoaded = resourceExists("fonts/BloggerSans-Medium.ttf")
+private val blueCurveLoaded = resourceExists("fonts/BlueCurve-Bold.ttf")
 
 private val ClearSans: FontFamily =
     if (clearSansLoaded) FontFamily(Font("fonts/ClearSans-Bold.ttf", FontWeight.Bold))
@@ -170,6 +245,16 @@ private val ClearSans: FontFamily =
 
 private val AqumTwo: FontFamily =
     if (aqumLoaded) FontFamily(Font("fonts/AqumTwo-Classic.ttf", FontWeight.Normal))
+    else FontFamily.SansSerif
+
+/** Blogger Sans Medium — подпись «Esc» на клавише в экране «ХОТКЕИ». */
+val BloggerSans: FontFamily =
+    if (bloggerLoaded) FontFamily(Font("fonts/BloggerSans-Medium.ttf", FontWeight.Medium))
+    else FontFamily.SansSerif
+
+/** Blue Curve Bold — цифры счёта (очки/партии) и поля корректировки, 32 sp (см. scoreDigits). */
+val BlueCurve: FontFamily =
+    if (blueCurveLoaded) FontFamily(Font("fonts/BlueCurve-Bold.ttf", FontWeight.Bold))
     else FontFamily.SansSerif
 
 /** Системный Arial — шрифт табло для зрителей (экран предпросмотра). Если Arial
@@ -189,6 +274,7 @@ class ScoreKeeperTypography(
     val caption: TextStyle,     // «РАЗРАБОТАНО ДЛЯ СПОРТИВНОЙ КОМИССИИ»
     val doneButton: TextStyle,  // «ГОТОВО»
     val field: TextStyle,       // текст в полях ввода
+    val scoreDigits: TextStyle, // цифры очков/партий и полей корректировки — Blue Curve Bold 32
 )
 
 val DefaultTypography = ScoreKeeperTypography(
@@ -228,6 +314,7 @@ val DefaultTypography = ScoreKeeperTypography(
         fontSize = 31.sp,
     ),
     field = TextStyle(fontFamily = AqumTwo, fontSize = 20.sp),
+    scoreDigits = TextStyle(fontFamily = BlueCurve, fontWeight = FontWeight.Bold, fontSize = 32.sp),
 )
 
 // ───────────────────────── Язык интерфейса ─────────────────────────
@@ -272,6 +359,11 @@ class AppStrings(
     val setsLabel: String,
     val courtSideLabel: String,
     val winnerLabel: String,
+    // Предупреждение о закрытии матча («ВЫ УВЕРЕНЫ?»)
+    val areYouSure: String,
+    val closeWarningLine1: String,
+    val closeWarningLine2: String,
+    val closeWarningLine3: String, // красная строка («СБРОШЕН»)
 )
 
 val RuStrings = AppStrings(
@@ -310,6 +402,10 @@ val RuStrings = AppStrings(
     setsLabel = "ПАРТИИ",
     courtSideLabel = "СТОРОНА ПОЛЯ\nПОДАЮЩЕЙ КОМАНДЫ",
     winnerLabel = "ПОБЕДИТЕЛЬ",
+    areYouSure = "ВЫ УВЕРЕНЫ?",
+    closeWarningLine1 = "ЕСЛИ ВЫ ПОДТВЕРДИТЕ",
+    closeWarningLine2 = "ЗАКРЫТИЕ МАТЧА, ТО СЧЁТ БУДЕТ",
+    closeWarningLine3 = "СБРОШЕН",
 )
 
 val EnStrings = AppStrings(
@@ -348,6 +444,10 @@ val EnStrings = AppStrings(
     setsLabel = "SETS",
     courtSideLabel = "SERVING TEAM'S\nCOURT SIDE",
     winnerLabel = "WINNER",
+    areYouSure = "ARE YOU SURE?",
+    closeWarningLine1 = "IF YOU CONFIRM",
+    closeWarningLine2 = "CLOSING THE MATCH, THE SCORE WILL BE",
+    closeWarningLine3 = "RESET",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings =
