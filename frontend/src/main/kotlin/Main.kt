@@ -99,6 +99,7 @@ import ui.screens.TeamSetupOverlay
 import ui.theme.AppLanguage
 import ui.theme.AppStrings
 import ui.theme.ArialFamily
+import ui.theme.BloggerSans
 import ui.theme.RuStrings
 import ui.theme.Brand
 import ui.theme.DesignStage
@@ -270,7 +271,7 @@ private fun runApp() = application {
                 return@handler true
             }
             HotKey.H -> {
-                if (showHotkeys) { if (first) showHotkeys = false; return@handler true }
+                // H только открывает экран хоткеев (закрывается он стрелкой «назад» или Esc).
                 if (inGame && top == null) { if (first) showHotkeys = true; return@handler true }
                 return@handler false
             }
@@ -574,14 +575,13 @@ private fun TeamLogoCircle(logo: ImageBitmap?, modifier: Modifier = Modifier) {
     }
 }
 
-/** Светло-синяя пилюля со счётом («00»). */
+/** Светло-синяя пилюля со счётом («00»): цифры — Blue Curve Bold 32 (type.scoreDigits). */
 @Composable
 private fun ScorePill(
     value: String,
     modifier: Modifier = Modifier,
     width: Dp = 92.dp,
     height: Dp = 64.dp,
-    fontSize: TextUnit = 36.sp,
     corner: Dp = 20.dp,
 ) {
     val colors = ScoreKeeperTheme.colors
@@ -592,7 +592,7 @@ private fun ScorePill(
     ) {
         BasicText(
             value,
-            style = type.teamLabel.copy(fontSize = fontSize, color = colors.pillText),
+            style = type.scoreDigits.copy(color = colors.pillText),
             maxLines = 1, softWrap = false,
         )
     }
@@ -694,8 +694,8 @@ private fun SetsServePanel(
             )
         }
         // пилюли выигранных партий
-        ScorePill("%02d".format(sets1), Modifier.offset(941.5.dp, 24.5.dp), width = 90.dp, height = 53.dp, fontSize = 32.sp, corner = 26.5.dp)
-        ScorePill("%02d".format(sets2), Modifier.offset(941.5.dp, 128.5.dp), width = 90.dp, height = 53.dp, fontSize = 32.sp, corner = 26.5.dp)
+        ScorePill("%02d".format(sets1), Modifier.offset(941.5.dp, 24.5.dp), width = 90.dp, height = 53.dp, corner = 26.5.dp)
+        ScorePill("%02d".format(sets2), Modifier.offset(941.5.dp, 128.5.dp), width = 90.dp, height = 53.dp, corner = 26.5.dp)
         // вкладка «ПАРТИЯ N» на верхнем крае карточки
         Box(
             Modifier.offset(436.5.dp, (-11.5).dp).size(213.dp, 43.dp)
@@ -1109,8 +1109,8 @@ private fun NumPillField(
             value = value,
             onValueChange = { v -> onValueChange(v.filter { it.isDigit() }.take(3)) },
             singleLine = true,
-            textStyle = type.teamLabel.copy(
-                fontSize = 28.sp, color = colors.pillText, textAlign = TextAlign.Center,
+            textStyle = type.scoreDigits.copy(
+                color = colors.pillText, textAlign = TextAlign.Center,
             ),
             cursorBrush = SolidColor(colors.pillText),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp).trackTyping(),
@@ -1841,6 +1841,51 @@ private fun CorrectionDialogOverlay(
     }
 }
 
+// ───────────────────────── Предупреждение о закрытии матча ─────────────────────────
+//
+// Геометрия замерена по макету «Предупреждение.pdf» (1920×1080, карточка 794×411, r50):
+// заголовок «ВЫ УВЕРЕНЫ?» 48 (базовая линия 71), три строки 36 с шагом 45
+// (базовые линии 179 / 224 / 269, последняя — красная #FF2828), кнопка «ПОДТВЕРДИТЬ»
+// 324×55 в точке (235, 320) — та же зелёная кнопка, что в жеребьёвке/выводе текста.
+// Цвета берутся из темы, поэтому диалог одинаково выглядит в светлой и тёмной теме:
+// карточка — cardSurface, заголовок — overlayHeading, текст — captionText.
+
+/** Красная строка предупреждения («СБРОШЕН») — в обеих темах, как в макете. */
+private val CloseWarningRed = Color(0xFFFF2828)
+
+@OptIn(ExperimentalTextApi::class)
+@Composable
+private fun CloseMatchWarningDialog(
+    onBack: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val colors = ScoreKeeperTheme.colors
+    val type = ScoreKeeperTheme.typography
+    val strings = ScoreKeeperTheme.strings
+    val measurer = rememberTextMeasurer()
+    RegisterHotkeyLayer(onBack = onBack, onConfirm = onConfirm)
+
+    val title48 = type.teamLabel.copy(fontSize = 48.sp)
+    val body36 = type.teamLabel.copy(fontSize = 36.sp)
+
+    MatchDialogScaffold(cardHeight = 411.dp, onBack = onBack) {
+        Canvas(Modifier.fillMaxSize()) {
+            msText(
+                measurer, strings.areYouSure, title48,
+                colors.overlayHeading, colors.textStroke, 397f, 71f,
+            )
+            centeredText(measurer, strings.closeWarningLine1, body36, colors.captionText, 397f, 179f)
+            centeredText(measurer, strings.closeWarningLine2, body36, colors.captionText, 397f, 224f)
+            centeredText(measurer, strings.closeWarningLine3, body36, CloseWarningRed, 397f, 269f)
+        }
+        GreenActionButton(
+            strings.confirm, 324.dp,
+            onClick = onConfirm,
+            modifier = Modifier.offset(235.dp, 320.dp),
+        )
+    }
+}
+
 
 // ───────────────────────── Верхняя панель экрана матча ─────────────────────────
 //
@@ -1871,6 +1916,22 @@ private fun DrawScope.plainText(
     val u = density
     val layout = measurer.measure(text, style)
     drawText(layout, color = color, topLeft = Offset(x * u, baseline * u - layout.firstBaseline))
+}
+
+/** Текст без контура, центрированный в точке [cx], по базовой линии (px макета). */
+@OptIn(ExperimentalTextApi::class)
+private fun DrawScope.centeredText(
+    measurer: TextMeasurer,
+    text: String,
+    style: TextStyle,
+    color: Color,
+    cx: Float,
+    baseline: Float,
+) {
+    val u = density
+    val layout = measurer.measure(text, style)
+    val w = layout.getLineRight(0) - layout.getLineLeft(0)
+    drawText(layout, color = color, topLeft = Offset(cx * u - w / 2f, baseline * u - layout.firstBaseline))
 }
 
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalTextApi::class)
@@ -1978,11 +2039,13 @@ private fun ScoreTopBar(
 private val KeyBaseColor = Color(0xFFD7DFE2)
 private val KeyOutlineColor = Color(0xFF222222)
 
-/** Что нарисовать внутри клавиши. */
-private enum class KeyGlyph { ONE, TWO, MINUS, TAB, BACKSPACE, SPACE, H, ESC, TILDE, F1, F2, ENTER }
+/** Что нарисовать внутри клавиши. (H здесь нет: H только открывает этот экран, см. runApp.) */
+private enum class KeyGlyph { ONE, TWO, MINUS, TAB, BACKSPACE, SPACE, ESC, TILDE, F1, F2, ENTER }
 
 private class KeycapSpec(val glyph: KeyGlyph, val x: Float, val y: Float, val bodyW: Float)
 
+// Основные клавиши начинаются наравне с кнопками матча (первый ряд — y≈154/159)
+// и идут с тем же шагом ~60 px, что и раньше.
 private val HotkeyCaps = listOf(
     KeycapSpec(KeyGlyph.ONE, 38.7f, 154.0f, 43.04f),
     KeycapSpec(KeyGlyph.TWO, 38.7f, 213.7f, 43.04f),
@@ -1990,12 +2053,11 @@ private val HotkeyCaps = listOf(
     KeycapSpec(KeyGlyph.TAB, 38.7f, 332.0f, 65.0f),
     KeycapSpec(KeyGlyph.BACKSPACE, 39.0f, 394.0f, 77.0f),
     KeycapSpec(KeyGlyph.SPACE, 39.0f, 457.0f, 151.0f),
-    KeycapSpec(KeyGlyph.H, 433.7f, 159.0f, 43.04f),
-    KeycapSpec(KeyGlyph.ESC, 433.7f, 219.0f, 43.04f),
-    KeycapSpec(KeyGlyph.TILDE, 433.7f, 279.0f, 43.04f),
-    KeycapSpec(KeyGlyph.F1, 433.7f, 339.0f, 43.04f),
-    KeycapSpec(KeyGlyph.F2, 433.7f, 399.0f, 43.04f),
-    KeycapSpec(KeyGlyph.ENTER, 434.0f, 461.0f, 85.0f),
+    KeycapSpec(KeyGlyph.ESC, 433.7f, 159.0f, 43.04f),
+    KeycapSpec(KeyGlyph.TILDE, 433.7f, 219.0f, 43.04f),
+    KeycapSpec(KeyGlyph.F1, 433.7f, 279.0f, 43.04f),
+    KeycapSpec(KeyGlyph.F2, 433.7f, 339.0f, 43.04f),
+    KeycapSpec(KeyGlyph.ENTER, 434.0f, 401.0f, 85.0f),
 )
 
 /** Тело клавиши в локальных координатах (левый верх тела = 0,0), единицы макета. */
@@ -2088,8 +2150,8 @@ private fun HotkeysOverlay(
         val label14 = type.teamLabel.copy(fontSize = 14.sp)
         val glyph26 = type.teamLabel.copy(fontSize = 26.sp)
         val glyph13 = type.teamLabel.copy(fontSize = 13.sp)
-        val glyph12 = type.teamLabel.copy(fontSize = 12.sp)
-        val glyph6 = type.teamLabel.copy(fontSize = 6.2.sp)
+        // «Esc» — шрифт BloggerSans-Medium (fonts/BloggerSans-Medium.ttf), как в макете.
+        val escStyle = TextStyle(fontFamily = BloggerSans, fontSize = 12.sp)
 
         // подпись: текст, x (левый край), базовая линия
         class Lbl(val text: String, val x: Float, val y: Float)
@@ -2098,19 +2160,19 @@ private fun HotkeysOverlay(
             Lbl("ДОБАВИТЬ ОЧКО", 97f, 234.7f), Lbl("КОМАНДЕ 2", 97f, 252.7f),
             Lbl("ОТКАТ", 97f, 300f), Lbl("КОРРЕКТИРОВКА", 117.7f, 361f), Lbl("СБРОС", 133f, 421f),
             Lbl("НАЧАТЬ/", 207f, 468f), Lbl("ПРОДОЛЖИТЬ/", 207f, 486f), Lbl("ЗАВЕРШИТЬ МАТЧ", 207f, 504f),
-            Lbl("НАЗАД", 492.2f, 184f), Lbl("НАЗАД", 492.2f, 244f), Lbl("НАСТРОЙКИ", 492f, 304f),
-            Lbl("ЗАКРЫТЬ", 492f, 357f), Lbl("ПРИЛОЖЕНИЕ", 492f, 375f),
-            Lbl("СВЕРНУТЬ", 492f, 417f), Lbl("ПРИЛОЖЕНИЕ", 492f, 435f),
-            Lbl("ГОТОВО/", 536f, 482f), Lbl("ПОДТВЕРДИТЬ", 536f, 500f),
+            Lbl("НАЗАД", 492.2f, 184f), Lbl("НАСТРОЙКИ", 492f, 244f),
+            Lbl("ЗАКРЫТЬ", 492f, 297f), Lbl("ПРИЛОЖЕНИЕ", 492f, 315f),
+            Lbl("СВЕРНУТЬ", 492f, 357f), Lbl("ПРИЛОЖЕНИЕ", 492f, 375f),
+            Lbl("ГОТОВО/", 536f, 422f), Lbl("ПОДТВЕРДИТЬ", 536f, 440f),
         ) else listOf(
             Lbl("ADD POINT TO", 97f, 175f), Lbl("TEAM 1", 97f, 193f),
             Lbl("ADD POINT TO", 97f, 234.7f), Lbl("TEAM 2", 97f, 252.7f),
             Lbl("UNDO", 97f, 300f), Lbl("CORRECTION", 117.7f, 361f), Lbl("RESET", 133f, 421f),
             Lbl("START /", 207f, 468f), Lbl("CONTINUE /", 207f, 486f), Lbl("FINISH MATCH", 207f, 504f),
-            Lbl("BACK", 492.2f, 184f), Lbl("BACK", 492.2f, 244f), Lbl("SETTINGS", 492f, 304f),
-            Lbl("CLOSE", 492f, 357f), Lbl("THE APP", 492f, 375f),
-            Lbl("MINIMIZE", 492f, 417f), Lbl("THE APP", 492f, 435f),
-            Lbl("DONE /", 536f, 482f), Lbl("CONFIRM", 536f, 500f),
+            Lbl("BACK", 492.2f, 184f), Lbl("SETTINGS", 492f, 244f),
+            Lbl("CLOSE", 492f, 297f), Lbl("THE APP", 492f, 315f),
+            Lbl("MINIMIZE", 492f, 357f), Lbl("THE APP", 492f, 375f),
+            Lbl("DONE /", 536f, 422f), Lbl("CONFIRM", 536f, 440f),
         )
 
         MatchDialogScaffold(cardHeight = 564.dp, onBack = onBack) {
@@ -2146,13 +2208,8 @@ private fun HotkeysOverlay(
                     when (cap.glyph) {
                         KeyGlyph.ONE -> plainText(measurer, "1", glyph26, Color.Black, cap.x + 16.6f, cap.y + 25f)
                         KeyGlyph.TWO -> plainText(measurer, "2", glyph26, Color.Black, cap.x + 12.6f, cap.y + 25f)
-                        KeyGlyph.H -> plainText(measurer, "H", glyph26, Color.Black, cap.x + 11.9f, cap.y + 25f)
-                        KeyGlyph.ESC -> {
-                            // В макете «Esc» набрано с маленькими «sc»; в шрифте приложения строчные буквы
-                            // совпадают с заглавными, поэтому рисуем «E» крупной, «SC» — мелкой.
-                            plainText(measurer, "E", glyph12, Color.Black, cap.x + 11.87f, cap.y + 19f)
-                            plainText(measurer, "SC", glyph6, Color.Black, cap.x + 20.5f, cap.y + 19f)
-                        }
+                        // «Esc» целиком шрифтом BloggerSans-Medium: строчные «sc» там естественно меньше «E».
+                        KeyGlyph.ESC -> plainText(measurer, "Esc", escStyle, Color.Black, cap.x + 11.87f, cap.y + 19f)
                         KeyGlyph.TILDE -> plainText(measurer, "~", glyph26, Color.Black, cap.x + 13.6f, cap.y + 24.7f)
                         KeyGlyph.F1 -> plainText(measurer, "F1", glyph13, Color.Black, cap.x + 14.6f, cap.y + 20f)
                         KeyGlyph.F2 -> plainText(measurer, "F2", glyph13, Color.Black, cap.x + 12.6f, cap.y + 20f)
@@ -2191,6 +2248,7 @@ fun VoleyballScreen(
     var showTossDialog by remember { mutableStateOf(false) }
     var showTextDialog by remember { mutableStateOf(false) }
     var showCorrectionDialog by remember { mutableStateOf(false) }
+    var showCloseWarning by remember { mutableStateOf(false) }
 
     LaunchedEffect(errorMsg) {
         if (errorMsg != null) {
@@ -2282,11 +2340,17 @@ fun VoleyballScreen(
     val correctionAction: () -> Unit = { showCorrectionDialog = true }
     // При выходе сразу скрываем сообщение на табло: локально и пустой рассылкой по WS.
     // Сбрасываем матч на сервере (/reset), затем уходим на главный экран.
-    val backAction: () -> Unit = {
+    val doBack: () -> Unit = {
         onTickerUpdate("")
         ApiClient.sendText("", onResult = {})
         ApiClient.reset(onResult = apply, onError = { errorMsg = it })
         onBack()
+    }
+    // «Назад» при матче в процессе или завершённом — через предупреждение о закрытии
+    // (счёт будет сброшен); при неначатом матче выходим сразу, терять нечего.
+    val backAction: () -> Unit = {
+        if (match.status == "IN_PROGRESS" || match.status == "FINISHED") showCloseWarning = true
+        else doBack()
     }
     val mainAction: () -> Unit = when (match.status) {
         "IN_PROGRESS" -> endMatchAction
@@ -2626,6 +2690,13 @@ fun VoleyballScreen(
                         }
                         showCorrectionDialog = false
                     },
+                )
+            }
+
+            if (showCloseWarning) {
+                CloseMatchWarningDialog(
+                    onBack = { showCloseWarning = false },
+                    onConfirm = { showCloseWarning = false; doBack() },
                 )
             }
         }
