@@ -17,6 +17,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -29,7 +30,6 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
@@ -86,6 +86,7 @@ enum class KeyGlyph {
  */
 @Stable
 class HotkeyPulse {
+    /** Счётчик «вспышек»: растёт на каждое нажатие, даже если клавиша та же. */
     internal var seq by mutableLongStateOf(0L)
 
     /** id последней нажатой клавиши. */
@@ -101,13 +102,6 @@ class HotkeyPulse {
     }
 }
 
-/**
- * Пружина может «перелетать» границы 0…1, а `lerp(Color, Color, t)` в Compose смешивает
- * цвета в пространстве Oklab: при t вне диапазона получается цвет вне Oklab/sRGB, и Skia
- * выбрасывает IllegalArgumentException. Поэтому параметр анимации всегда зажимаем.
- */
-internal fun safeT(t: Float): Float = if (t.isNaN()) 0f else t.coerceIn(0f, 1f)
-
 // Метрики Aqum two Classic (замерены по TTF): ascent = 1.0·size, descent = 0.26·size,
 // высота заглавной буквы = 0.702·size. Нужны, чтобы ставить текст точно по базовой линии
 // из макета, а не «на глаз».
@@ -119,9 +113,6 @@ internal fun blockTopForBaseline(baseline: Float, size: Float, lineHeight: Float
     val half = ((lineHeight - size * (AQUM_ASCENT + AQUM_DESCENT)) / 2f).coerceAtLeast(0f)
     return baseline - (half + size * AQUM_ASCENT)
 }
-
-/** Смешивание цветов, устойчивое к «перелёту» пружины (см. [safeT]). */
-internal fun lerpSafe(a: Color, b: Color, t: Float): Color = lerp(a, b, safeT(t))
 
 // ───────────────────────── Геометрия карточки (Frame 10.pdf) ─────────────────────────
 

@@ -44,10 +44,6 @@ import ui.theme.ScoreKeeperTheme
 // В светлой теме — голубые плашки #E6F3FD и синий текст #2070F5,
 // в тёмной (скрин матча) — тёмные плашки #141F31 и золотой #DFAF24.
 
-/** Смещение полосы на сцене 1920×1080 (правый верхний угол экрана матча). */
-private const val STRIP_X = 1193f
-private const val STRIP_Y = 26f
-
 /** Ширина полосы по макету. */
 internal const val TOP_BAR_WIDTH = 616f
 internal const val TOP_BAR_HEIGHT = 53f
@@ -124,7 +120,6 @@ internal fun MatchTopBar(
     val pillArrow = if (dark) Color(0xFFDFAF24) else Color(0xFF06326D)
     val pillText = if (dark) Color(0xFFDFAF24) else Color(0xFF21386A)
     val dividerColor = if (dark) Color(0xFF212E44) else Color(0xFFE2EEF7)
-    val bg = if (dark) Color(0xFF0B1524) else Color(0xFFFDFEFF)
     val timerSpan = remember { PathParser().parsePathString(TIMER_PATH).toPath() }
     val cogSpan = remember { PathParser().parsePathString(COG_PATH).toPath() }
     val cogCircle = remember { PathParser().parsePathString(COG_CIRCLE_PATH).toPath() }
@@ -168,7 +163,6 @@ internal fun MatchTopBar(
                 drawPath(backArrow, pillArrow, style = Stroke(width = 3f, cap = StrokeCap.Round))
             }
             // тексты — живые, чтобы шрифт и язык работали как в остальном приложении
-            val u = size.width / TOP_BAR_WIDTH
             // «ХОТКЕИ» — левый край 8.75, базовая линия 34.03
             val chipLayout = measurer.measure(AnnotatedString(strings.hotkeys), type.hotkeysChip)
             drawText(

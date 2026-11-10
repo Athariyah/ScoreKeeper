@@ -19,7 +19,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
@@ -42,16 +41,6 @@ private val LangUnselected = Color(0xFFBCBCBC)
 private val LangUnselectedDark = Color(0xFF6E93B8)
 
 private fun mix(a: Float, b: Float, t: Float): Float = a + (b - a) * t
-
-/**
- * Пружина может «перелетать» за пределы 0…1 (у неё есть отскок), а `lerp(Color, Color, t)`
- * в Compose смешивает цвета через Oklab: при t < 0 или t > 1 получается цвет вне диапазона
- * Oklab/sRGB и Skia выбрасывает IllegalArgumentException. Поэтому t всегда зажимаем.
- */
-internal fun safeT(t: Float): Float = if (t.isNaN()) 0f else t.coerceIn(0f, 1f)
-
-/** Смешивание цветов, устойчивое к «перелёту» пружины. */
-internal fun lerpSafe(a: Color, b: Color, t: Float): Color = lerp(a, b, safeT(t))
 
 // Солнце (центр иконки в (66, 25)) и луна со звёздами (центр ручки в (28, 25)) — пути из SVG.
 private const val SUN_PATH =

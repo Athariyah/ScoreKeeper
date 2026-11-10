@@ -121,7 +121,7 @@ fun HotkeysOverlay(
                     ) {
                         // Всё содержимое карточки — один Canvas строго по координатам макета.
                         Canvas(Modifier.fillMaxSize()) {
-                            val u = 1.dp.toPx()
+                            val u = size.width / HotkeyPanel.WIDTH
                             drawHotkeyCardContent(
                                 measurer = measurer,
                                 strings = strings,
@@ -204,15 +204,18 @@ private fun DrawScope.drawHotkeyCardContent(
     val labelStyle = type.hotkeyLabel.copy(color = labelColor)
     rows.forEach { row ->
         val layout = measurer.measure(AnnotatedString(row.label(strings)), labelStyle)
+        // размеры в макете — пиксели сцены, поэтому шрифтовые метрики тоже берём в px
+        val sizePx = labelStyle.fontSize.toPx()
+        val linePx = labelStyle.lineHeight.toPx()
         val top = blockTopForBaseline(
             baseline = row.textY,
-            size = labelStyle.fontSize.value,
-            lineHeight = labelStyle.lineHeight.value * u,
+            size = sizePx,
+            lineHeight = linePx,
         )
         drawText(
             textLayoutResult = layout,
             color = labelColor,
-            topLeft = Offset(row.textX * unit, top),
+            topLeft = Offset(row.textX * unit, top * unit),
         )
     }
 
