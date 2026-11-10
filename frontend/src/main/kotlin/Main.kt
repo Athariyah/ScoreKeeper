@@ -69,6 +69,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -240,9 +241,30 @@ private fun runApp() = application {
         if (e.type == KeyEventType.KeyUp) {
             pressedKeys.remove(e.key)
             e.toHotKey()?.let(Hotkeys::onKeyUp)
-            return@handler false
+            // При открытом окне хоткеев съедаем и KeyUp (в Compose clickable реагирует на Space по KeyUp),
+            // чтобы ни одна кнопка под оверлеем не сработала и не отправила запрос на бэкенд.
+            return@handler showHotkeys && !splashVisible
         }
-        if (e.type != KeyEventType.KeyDown) return@handler false
+        // В AWT/Skiko символьный ввод приходит отдельным событием KeyEventType.Unknown (KEY_TYPED) —
+        // пока открыты хоткеи, блокируем и его, чтобы ни один элемент под оверлеем не получил ввод.
+        if (e.type != KeyEventType.KeyDown) return@handler showHotkeys && !splashVisible
+
+        // Пока открыто окно «ХОТКЕИ», страничка работает исключительно в режиме демонстрации нажатий:
+        // любая горячая клавиша (включая F1/F2/~/Enter/1/2/-/Tab/⌫/Space) лишь проигрывает
+        // анимацию нажатия на своей клавише и не отправляет команды на бэкенд / в приложение,
+        // кроме Esc («Назад»), закрывающего само окно хоткеев.
+        if (showHotkeys && !splashVisible) {
+            val hk = e.toHotKey() ?: return@handler true
+            val first = pressedKeys.add(e.key)
+            if (first) {
+                Hotkeys.onKeyDown(hk)
+                if (hk == HotKey.ESC) {
+                    Hotkeys.layers.lastOrNull()?.onBack?.invoke() ?: run { showHotkeys = false }
+                }
+            }
+            return@handler true
+        }
+
         val hk = e.toHotKey() ?: return@handler false
         val first = pressedKeys.add(e.key) // автоповтор зажатой клавиши игнорируем
 
@@ -250,7 +272,7 @@ private fun runApp() = application {
             Hotkeys.onKeyDown(hk)
         }
 
-        // F1 / F2 работают всегда
+        // F1 / F2 работают вне окна хоткеев всегда
         if (hk == HotKey.F1) { if (first) exitProcess(0); return@handler true }
         if (hk == HotKey.F2) { if (first) windowState.isMinimized = true; return@handler true }
 
@@ -284,10 +306,6 @@ private fun runApp() = application {
             }
             else -> Unit
         }
-
-        // Пока открыт экран «ХОТКЕИ», перехватываем остальные хоткеи (1/2/-/Tab/⌫/Space),
-        // чтобы нажатие проигрывало анимацию клавиши в окне хоткеев, не меняя счёт и фокус.
-        if (showHotkeys) return@handler true
 
         // клавиши матча — только на экране игры и когда не открыт ни один оверлей
         if (top != null || !inGame) return@handler false
@@ -2277,7 +2295,17 @@ private fun HotkeysOverlay(
         val russian = language == AppLanguage.RU
         val measurer = rememberTextMeasurer()
         val scope = rememberCoroutineScope()
+        val focusManager = LocalFocusManager.current
         var closingByEsc by remember { mutableStateOf(false) }
+        // Снимаем фокус с кнопок и полей ввода под оверлеем, чтобы нажатия в окне хоткеев
+        // гарантированно не активировали элементы матча и не отправляли команды на бэкенд.
+        LaunchedEffect(Unit) {
+            focusManager.clearFocus(force = true)
+            Hotkeys.typing = false
+        }
+        DisposableEffect(Unit) {
+            onDispose { Hotkeys.clearPressed() }
+        }
         // По Esc сначала показываем короткий ход клавиши Esc вниз, затем закрываем окно;
         // Enter оставляем свободным (onConfirm = null), чтобы его тоже можно было проверить в окне хоткеев.
         RegisterHotkeyLayer(
