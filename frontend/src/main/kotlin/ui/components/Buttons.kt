@@ -52,6 +52,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import ui.hotkeys.HotKey
+import ui.hotkeys.Hotkeys
+import ui.hotkeys.rememberHotkeyPress
 import ui.theme.ScoreKeeperTheme
 
 // ───────────────────────── Кнопка вида спорта (370×140) ─────────────────────────
@@ -204,12 +207,15 @@ fun RoundIconButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     hoverTurn: Float = 90f,
+    hotKey: HotKey? = null,
     icon: @Composable (tint: Color, modifier: Modifier) -> Unit,
 ) {
     val colors = ScoreKeeperTheme.colors
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    val pressed by interaction.collectIsPressedAsState()
+    val mousePressed by interaction.collectIsPressedAsState()
+    val hkPress = rememberHotkeyPress(hotKey, enabled = Hotkeys.layers.isEmpty())
+    val pressed = mousePressed || hkPress > 0.5f
 
     val hover = animateFloatAsState(
         targetValue = if (hovered) 1f else 0f,
@@ -219,7 +225,7 @@ fun RoundIconButton(
     val pressSpec: AnimationSpec<Float> =
         if (pressed) tween(70) else spring(dampingRatio = 0.45f, stiffness = 500f)
     val press = animateFloatAsState(
-        targetValue = if (pressed) 1f else 0f,
+        targetValue = if (mousePressed) 1f else hkPress,
         animationSpec = pressSpec,
         label = "press",
     )
@@ -237,19 +243,19 @@ fun RoundIconButton(
             .clip(CircleShape)
             .drawBehind {
                 drawRect(
-                    lerp(colors.iconButtonBg, colors.iconButtonBgHover, hover.value.coerceIn(0f, 1f)),
+                    lerp(colors.iconButtonBg, colors.iconButtonBgHover, (hover.value + hkPress).coerceIn(0f, 1f)),
                 )
             }
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        icon(colors.iconButtonFg, Modifier.graphicsLayer { rotationZ = hoverTurn * hover.value })
+        icon(colors.iconButtonFg, Modifier.graphicsLayer { rotationZ = hoverTurn * (hover.value + hkPress * 0.6f) })
     }
 }
 
 @Composable
 fun SettingsButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    RoundIconButton(onClick, modifier, hoverTurn = 60f) { tint, m ->
+    RoundIconButton(onClick, modifier, hoverTurn = 60f, hotKey = HotKey.TILDE) { tint, m ->
         Icon(Icons.Filled.Settings, contentDescription = "Настройки", modifier = m.size(32.dp), tint = tint)
     }
 }
@@ -257,7 +263,7 @@ fun SettingsButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 @Composable
 fun MinimizeButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     // У окна нет системной рамки (undecorated), поэтому сворачивание — своя кнопка «–».
-    RoundIconButton(onClick, modifier, hoverTurn = 0f) { tint, m ->
+    RoundIconButton(onClick, modifier, hoverTurn = 0f, hotKey = HotKey.F2) { tint, m ->
         Canvas(m.size(24.dp)) {
             val w = 5.5.dp.toPx()
             drawLine(
@@ -270,7 +276,7 @@ fun MinimizeButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 
 @Composable
 fun CloseButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    RoundIconButton(onClick, modifier, hoverTurn = 90f) { tint, m ->
+    RoundIconButton(onClick, modifier, hoverTurn = 90f, hotKey = HotKey.F1) { tint, m ->
         Canvas(m.size(24.dp)) {
             val w = 5.5.dp.toPx()
             val pad = w / 2f

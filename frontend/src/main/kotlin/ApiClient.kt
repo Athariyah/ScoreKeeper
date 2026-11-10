@@ -40,11 +40,18 @@ data class ScoreResponse(
 }
 
 @Serializable
+data class VolleyballMatchConfig(
+    @SerialName("sets_to_win") val setsToWin: Int,
+    @SerialName("set_points") val setPoints: List<Int>,
+)
+
+@Serializable
 private data class StartMatchRequest(
     val sport: String,
     val player1: String,
     val player2: String,
-    @SerialName("server_index") val serverIndex: Int
+    @SerialName("server_index") val serverIndex: Int,
+    val config: VolleyballMatchConfig? = null,
 )
 
 @Serializable
@@ -106,8 +113,19 @@ object ApiClient {
         }
     }
 
-    fun startMatch(sport: String, p1: String, p2: String, server: Int, onResult: (ScoreResponse?) -> Unit, onError: ((String) -> Unit)? = null) = call({
-        client.post("$BASE_URL/start") { contentType(ContentType.Application.Json); setBody(StartMatchRequest(sport, p1, p2, server)) }.body()
+    fun startMatch(
+        sport: String,
+        p1: String,
+        p2: String,
+        server: Int,
+        config: VolleyballMatchConfig? = null,
+        onResult: (ScoreResponse?) -> Unit,
+        onError: ((String) -> Unit)? = null,
+    ) = call({
+        client.post("$BASE_URL/start") {
+            contentType(ContentType.Application.Json)
+            setBody(StartMatchRequest(sport, p1, p2, server, config))
+        }.body()
     }, onResult, onError)
 
     fun addPoint(playerIndex: Int, onResult: (ScoreResponse?) -> Unit, onError: ((String) -> Unit)? = null) = call({
