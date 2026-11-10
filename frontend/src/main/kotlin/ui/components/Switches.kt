@@ -95,19 +95,20 @@ fun ThemeSwitch(dark: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifi
             ),
     ) {
         val s = size.width / 94f
+        val tc = t.coerceIn(0f, 1f)
         withTransform({ scale(s, s, Offset.Zero) }) {
             drawRoundRect(colors.cardBorder, Offset.Zero, Size(94f, 50f), CornerRadius(25f))
             drawRoundRect(SwitchTrack, Offset(4f, 4f), Size(86f, 42f), CornerRadius(21f))
             val cx = mix(28f, 66f, t)
-            drawCircle(lerp(Color(0xFF141F31), Color.White, t), radius = 18f, center = Offset(cx, 25f))
-            if (t < 0.98f) {
+            drawCircle(lerp(Color(0xFF141F31), Color.White, tc), radius = 18f, center = Offset(cx, 25f))
+            if (tc < 0.98f) {
                 withTransform({ translate(cx - 28f, 0f) }) {
-                    drawPath(moonPath, SwitchIcon, alpha = (1f - t).coerceIn(0f, 1f))
+                    drawPath(moonPath, SwitchIcon, alpha = 1f - tc)
                 }
             }
-            if (t > 0.02f) {
+            if (tc > 0.02f) {
                 withTransform({ translate(cx - 66f, 0f) }) {
-                    drawPath(sunPath, SwitchIcon, alpha = t.coerceIn(0f, 1f))
+                    drawPath(sunPath, SwitchIcon, alpha = tc)
                 }
             }
         }
@@ -145,14 +146,15 @@ fun LanguageSwitch(
             },
     ) {
         val s = size.width / 94f
+        val tc = t.coerceIn(0f, 1f)
         withTransform({ scale(s, s, Offset.Zero) }) {
             drawRoundRect(colors.cardBorder, Offset.Zero, Size(94f, 81f), CornerRadius(25f))
             drawRoundRect(SwitchTrack, Offset(4f, 4f), Size(86f, 74f), CornerRadius(25f))
             // Белая плашка: в покое совпадает с путями из SVG (y 7→41, высота 34,
             // «внешние» углы круглые 24.3, «внутренние» 9.7 — при езде углы перетекают).
             val py = mix(7f, 41f, t)
-            val topR = mix(24.3f, 9.7f, t)
-            val botR = mix(9.7f, 24.3f, t)
+            val topR = mix(24.3f, 9.7f, tc)
+            val botR = mix(9.7f, 24.3f, tc)
             val pill = Path().apply {
                 addRoundRect(
                     RoundRect(
@@ -165,8 +167,8 @@ fun LanguageSwitch(
                 )
             }
             drawPath(pill, colors.cardSurface)
-            drawPath(ruPath, lerp(colors.overlayHeading, colors.langUnselected, t))
-            drawPath(enPath, lerp(colors.langUnselected, colors.overlayHeading, t))
+            drawPath(ruPath, lerp(colors.overlayHeading, colors.langUnselected, tc))
+            drawPath(enPath, lerp(colors.langUnselected, colors.overlayHeading, tc))
         }
     }
 }
