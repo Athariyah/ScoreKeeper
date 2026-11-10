@@ -141,7 +141,7 @@ internal fun OverlayScaffold(
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.52f * appear.value))
+                .background(Color.Black.copy(alpha = 0.52f * appear.value.coerceIn(0f, 1f)))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,

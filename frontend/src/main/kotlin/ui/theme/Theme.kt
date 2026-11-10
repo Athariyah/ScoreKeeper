@@ -284,6 +284,9 @@ class ScoreKeeperTypography(
     val panelHeader: TextStyle, // «КНОПКИ МАТЧА» / «ОСНОВНЫЕ»
     val hotkeyLabel: TextStyle, // подпись рядом с клавишей
     val hotkeyKey: TextStyle,   // символ на клавише («1», «Esc», «F1»…)
+    val hotkeysChip: TextStyle, // подпись кнопки «ХОТКЕИ» в верхней полосе
+    val timerText: TextStyle,   // «00:00» в верхней полосе
+    val pillLabel: TextStyle,   // «НАЗАД» в пилюле верхней полосы
 )
 
 val DefaultTypography = ScoreKeeperTypography(
@@ -323,25 +326,45 @@ val DefaultTypography = ScoreKeeperTypography(
         fontSize = 31.sp,
     ),
     field = TextStyle(fontFamily = AqumTwo, fontSize = 20.sp),
+    // Размеры ниже замерены по макетам: «ХОТКЕИ» — 46, заголовки колонок — 24,
+    // подписи строк — 13.9 (ширина строки в макете / ширина глифов Aqum), символы на клавишах — 22.
     panelTitle = TextStyle(
         fontFamily = AqumTwo,
         fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
-        fontSize = 46.sp,
+        fontSize = 45.6.sp,
     ),
     panelHeader = TextStyle(
         fontFamily = AqumTwo,
         fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
-        fontSize = 27.sp,
+        fontSize = 23.3.sp,
     ),
     hotkeyLabel = TextStyle(
         fontFamily = AqumTwo,
         fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
-        fontSize = 20.sp, lineHeight = 24.sp,
+        fontSize = 13.9.sp, lineHeight = 18.2.sp,
     ),
     hotkeyKey = TextStyle(
         fontFamily = AqumTwo,
         fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
-        fontSize = 26.sp,
+        fontSize = 22.sp,
+    ),
+    // Подпись на кнопке «ХОТКЕИ» в верхней полосе: 68 dp в макете 616×53 → 18.5 sp.
+    hotkeysChip = TextStyle(
+        fontFamily = AqumTwo,
+        fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
+        fontSize = 18.5.sp,
+    ),
+    // «00:00» в верхней полосе — 68.4 dp шириной → 22.6 sp.
+    timerText = TextStyle(
+        fontFamily = AqumTwo,
+        fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
+        fontSize = 22.6.sp,
+    ),
+    // «НАЗАД» в пилюле — 54 dp шириной → 14.8 sp.
+    pillLabel = TextStyle(
+        fontFamily = AqumTwo,
+        fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
+        fontSize = 14.8.sp,
     ),
 )
 

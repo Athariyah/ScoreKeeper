@@ -18,7 +18,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
@@ -111,7 +110,7 @@ fun MenuScreen(
                 Modifier.align(Alignment.BottomStart).padding(start = 23.dp, bottom = 17.dp),
             )
             InfoChip(
-                "version: release-1.0.",
+                "version: 1.1",
                 Modifier.align(Alignment.BottomEnd).padding(end = 34.dp, bottom = 17.dp),
             )
         }

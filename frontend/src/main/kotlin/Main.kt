@@ -1,6 +1,5 @@
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextMeasurer
@@ -43,7 +42,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.vector.PathParser
@@ -53,7 +51,6 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -62,7 +59,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -80,17 +76,17 @@ import ui.components.HotkeyId
 import ui.components.HotkeyKeys
 import ui.components.HotkeyPulse
 import ui.components.HotkeyRouter
-import ui.components.HotkeysChip
 import ui.components.trackTextFocus
 import ui.components.OvalsCanvas
-import ui.components.SettingsButton
 import ui.components.TennisBallIcon
 import ui.components.drawBlurredRoundRect
+import ui.components.lerpSafe
 import ui.components.rememberOvalsAnimation
 import ui.screens.BackArrowButton
 import ui.screens.DoneButton
 import ui.screens.FigmaText
 import ui.screens.HotkeysOverlay
+import ui.screens.MatchTopBar
 import ui.screens.MenuScreen
 import ui.screens.SettingsOverlay
 import ui.screens.TeamSetupOverlay
@@ -99,7 +95,6 @@ import ui.theme.AppLanguage
 import ui.theme.AppStrings
 import ui.theme.ArialFamily
 import ui.theme.RuStrings
-import ui.theme.Brand
 import ui.theme.DesignStage
 import ui.theme.LocalStage
 import ui.theme.ScoreKeeperTheme
@@ -920,25 +915,6 @@ private fun SlidersIcon(color: Color, knobFill: Color) {
     SvgPathIcon(ICON_CORRECTION, 108.5f, 73.5f, 44.dp, 39.dp, color)
 }
 
-@Composable
-private fun TimerIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(34.dp)) {
-        val sw = 3.4.dp.toPx()
-        val r = size.minDimension / 2f - sw - 1.dp.toPx()
-        val c = Offset(size.width / 2f, size.height / 2f + 2.5.dp.toPx())
-        drawCircle(color, r, c, style = Stroke(sw))
-        drawLine(color, Offset(c.x, c.y - r - sw / 2f), Offset(c.x, c.y - r - sw / 2f - 4.dp.toPx()), sw, StrokeCap.Round)
-        drawLine(
-            color,
-            Offset(c.x - 5.dp.toPx(), c.y - r - sw / 2f - 4.dp.toPx()),
-            Offset(c.x + 5.dp.toPx(), c.y - r - sw / 2f - 4.dp.toPx()),
-            sw, StrokeCap.Round,
-        )
-        drawLine(color, c, Offset(c.x, c.y - r * 0.55f), sw, StrokeCap.Round)
-        drawLine(color, c, Offset(c.x + r * 0.45f, c.y), sw, StrokeCap.Round)
-    }
-}
-
 // ───────────────────────── Кнопки экрана матча ─────────────────────────
 
 /** Белая кнопка-капсула с синей обводкой 2dp и синим свечением: СБРОС / ОТКАТ / КОРРЕКТИРОВКА. По SVG: glow #2171F4 52%, σ29.1, erode 11. */
@@ -1063,67 +1039,6 @@ private fun MainMatchButton(
                     fontSize = 28.sp,
                     color = if (colors.dark) colors.panelOnAccent else colors.onButton,
                 ),
-                maxLines = 1, softWrap = false,
-            )
-        }
-    }
-}
-
-/** Тонкий вертикальный разделитель верхней панели экрана матча (36 px, как в макете). */
-@Composable
-private fun TopBarDivider(modifier: Modifier = Modifier) {
-    val colors = ScoreKeeperTheme.colors
-    Box(
-        modifier.size(2.dp, 36.dp)
-            .clip(RoundedCornerShape(1.dp))
-            // На тёмной панели разделитель чуть светлее фона, иначе он «пропадает».
-            .background(
-                if (colors.dark) colors.accent.copy(alpha = 0.18f)
-                else colors.outlineSoft.copy(alpha = 0.7f),
-            ),
-    )
-}
-
-/** Пилюля «← НАЗАД» в верхней панели. */
-@OptIn(ExperimentalComposeUiApi::class)
-@Composable
-private fun BackPill(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val colors = ScoreKeeperTheme.colors
-    val type = ScoreKeeperTheme.typography
-    val interaction = remember { MutableInteractionSource() }
-    val scale = rememberPressScale(interaction)
-    Box(
-        modifier.size(173.dp, 49.dp)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(RoundedCornerShape(24.dp))
-            .background(colors.cardSurface)
-            // В тёмной теме пилюля должна читаться на фоне: тонкая золотая обводка, как на макете.
-            .border(
-                2.dp,
-                if (colors.dark) colors.accent.copy(alpha = 0.55f) else colors.outlineSoft,
-                RoundedCornerShape(24.dp),
-            )
-            .hoverable(interaction).pointerHoverIcon(PointerIcon.Hand)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            val fg = if (colors.dark) colors.accent else colors.headingText
-            Canvas(Modifier.size(24.dp, 20.dp)) {
-                val w = size.width
-                val h = size.height
-                val sw = 3.dp.toPx()
-                val midY = h / 2f
-                drawLine(fg, Offset(3.dp.toPx(), midY), Offset(w - 2.dp.toPx(), midY), sw, StrokeCap.Round)
-                drawLine(fg, Offset(3.dp.toPx(), midY), Offset(11.dp.toPx(), 2.5.dp.toPx()), sw, StrokeCap.Round)
-                drawLine(fg, Offset(3.dp.toPx(), midY), Offset(11.dp.toPx(), h - 2.5.dp.toPx()), sw, StrokeCap.Round)
-            }
-            BasicText(
-                text,
-                style = type.caption.copy(fontSize = 22.sp, color = fg),
                 maxLines = 1, softWrap = false,
             )
         }
@@ -1318,7 +1233,7 @@ private fun MatchDialogScaffold(
     LaunchedEffect(Unit) { appear.animateTo(1f, tween(160)) }
     Box(
         Modifier.fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.52f * appear.value))
+            .background(Color.Black.copy(alpha = 0.52f * appear.value.coerceIn(0f, 1f)))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -1578,7 +1493,7 @@ private fun MsOptionGroup(
                 Modifier.offset(o.x.dp, o.y.dp).size(o.w.dp, o.h.dp)
                     .graphicsLayer { scaleX = press[i]; scaleY = press[i] }
                     .clip(shape)
-                    .background(lerp(palette.gray, palette.grayHover, hover[i])),
+                    .background(lerpSafe(palette.gray, palette.grayHover, hover[i])),
             )
         }
         // 2. белый бегунок выбранной кнопки
@@ -1595,8 +1510,8 @@ private fun MsOptionGroup(
         // 3. тексты
         Canvas(Modifier.fillMaxSize()) {
             options.forEachIndexed { i, o ->
-                val color = lerp(palette.textOff, palette.textOn, on[i])
-                val stroke = lerp(palette.strokeOff, palette.strokeOn, on[i])
+                val color = lerpSafe(palette.textOff, palette.textOn, on[i])
+                val stroke = lerpSafe(palette.strokeOff, palette.strokeOn, on[i])
                 o.texts.forEach { t ->
                     msText(measurer, t.text, textStyle, color, stroke, t.cx, t.baseline, letterGap)
                 }
@@ -2546,34 +2461,26 @@ fun VoleyballScreen(
                 )
 
                 // ── Верхняя панель: хоткеи, таймер, настройки, назад ──
-                // Геометрия — по макету «Волейбол (В процессе).png»: пилюля «ХОТКЕИ» 1200→1320,
-                // разделители 1335 / 1505 / 1607, таймер 1370→1470, шестерёнка 1518→1584,
-                // пилюля «НАЗАД» 1634→1807 (высота 49, радиус 24.5).
-                HotkeysChip(
-                    onClick = onToggleHotkeys,
-                    modifier = Modifier.offset(1200.dp, 34.dp),
-                    width = 120.dp,
-                    height = 38.dp,
+                // Полоса целиком из макета «Group 7.pdf» (616×53), ставится в правый верхний
+                // угол сцены в точку (1193, 26) — как на скрине тёмной темы.
+                MatchTopBar(
+                    seconds = secondsElapsed,
+                    backLabel = strings.back,
+                    dark = colors.dark,
+                    pulseTick = hotkeyPulse.tick,
+                    pulseId = hotkeyPulse.lastId,
+                    onHotkeys = onToggleHotkeys,
+                    onSettings = onSettings,
+                    onBack = {
+                        if (match.status == "NOT_STARTED") {
+                            onBack()
+                        } else {
+                            showExitConfirmationDialog = true
+                            closeMatchError = null
+                        }
+                    },
+                    modifier = Modifier.offset(1193.dp, 26.dp),
                 )
-                TopBarDivider(Modifier.offset(1335.dp, 32.dp))
-                TimerIcon(colors.accent, Modifier.offset(1360.dp, 36.dp))
-                BasicText(
-                    formatTime(secondsElapsed),
-                    style = type.caption.copy(fontSize = 22.sp, color = colors.accent),
-                    modifier = Modifier.offset(1404.dp, 41.dp),
-                    maxLines = 1, softWrap = false,
-                )
-                TopBarDivider(Modifier.offset(1505.dp, 32.dp))
-                SettingsButton(onClick = onSettings, modifier = Modifier.offset(1518.dp, 30.dp))
-                TopBarDivider(Modifier.offset(1607.dp, 32.dp))
-                BackPill(strings.back, {
-                    if (match.status == "NOT_STARTED") {
-                        onBack()
-                    } else {
-                        showExitConfirmationDialog = true
-                        closeMatchError = null
-                    }
-                }, Modifier.offset(1634.dp, 28.dp))
 
                 // ── Заголовок вида спорта ──
                 if (isTennis) {

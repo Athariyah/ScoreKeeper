@@ -43,6 +43,16 @@ private val LangUnselectedDark = Color(0xFF6E93B8)
 
 private fun mix(a: Float, b: Float, t: Float): Float = a + (b - a) * t
 
+/**
+ * Пружина может «перелетать» за пределы 0…1 (у неё есть отскок), а `lerp(Color, Color, t)`
+ * в Compose смешивает цвета через Oklab: при t < 0 или t > 1 получается цвет вне диапазона
+ * Oklab/sRGB и Skia выбрасывает IllegalArgumentException. Поэтому t всегда зажимаем.
+ */
+internal fun safeT(t: Float): Float = if (t.isNaN()) 0f else t.coerceIn(0f, 1f)
+
+/** Смешивание цветов, устойчивое к «перелёту» пружины. */
+internal fun lerpSafe(a: Color, b: Color, t: Float): Color = lerp(a, b, safeT(t))
+
 // Солнце (центр иконки в (66, 25)) и луна со звёздами (центр ручки в (28, 25)) — пути из SVG.
 private const val SUN_PATH =
     "M65.0938 15.7256C64.8495 15.4813 64.7273 15.1788 64.7273 14.8182V12.2727C64.7273 11.9121 64.8495 11.6101 65.0938 11.3665C65.3382 11.123 65.6402 11.0009 66 11C66.3598 10.9992 66.6622 11.1213 66.9075 11.3665C67.1527 11.6118 67.2744 11.9138 67.2727 12.2727V14.8182C67.2727 15.1788 67.1505 15.4813 66.9062 15.7256C66.6618 15.97 66.3598 16.0918 66 16.0909C65.6402 16.0901 65.3382 15.9692 65.0938 15.7256Z" +
@@ -100,8 +110,8 @@ fun ThemeSwitch(dark: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifi
         withTransform({ scale(s, s, Offset.Zero) }) {
             drawRoundRect(colors.cardBorder, Offset.Zero, Size(94f, 50f), CornerRadius(25f))
             drawRoundRect(colors.fieldBg, Offset(4f, 4f), Size(86f, 42f), CornerRadius(21f))
-            val cx = mix(28f, 66f, t)
-            drawCircle(lerp(Color.Black, Color.White, t), radius = 18f, center = Offset(cx, 25f))
+            val cx = mix(28f, 66f, safeT(t))
+            drawCircle(lerpSafe(Color.Black, Color.White, t), radius = 18f, center = Offset(cx, 25f))
             if (t < 0.98f) {
                 withTransform({ translate(cx - 28f, 0f) }) {
                     drawPath(moonPath, SwitchIcon, alpha = (1f - t).coerceIn(0f, 1f))
@@ -152,9 +162,9 @@ fun LanguageSwitch(
             drawRoundRect(colors.fieldBg, Offset(4f, 4f), Size(86f, 74f), CornerRadius(25f))
             // Белая плашка: в покое совпадает с путями из SVG (y 7→41, высота 34,
             // «внешние» углы круглые 24.3, «внутренние» 9.7 — при езде углы перетекают).
-            val py = mix(7f, 41f, t)
-            val topR = mix(24.3f, 9.7f, t)
-            val botR = mix(9.7f, 24.3f, t)
+            val py = mix(7f, 41f, safeT(t))
+            val topR = mix(24.3f, 9.7f, safeT(t))
+            val botR = mix(9.7f, 24.3f, safeT(t))
             val pill = Path().apply {
                 addRoundRect(
                     RoundRect(
@@ -169,8 +179,8 @@ fun LanguageSwitch(
             drawPath(pill, if (colors.dark) colors.tabFill else Color.White)
             val selected = if (colors.dark) colors.accent else Color(0xFF2070F5)
             val unselected = if (colors.dark) LangUnselectedDark else LangUnselected
-            drawPath(ruPath, lerp(selected, unselected, t))
-            drawPath(enPath, lerp(unselected, selected, t))
+            drawPath(ruPath, lerpSafe(selected, unselected, t))
+            drawPath(enPath, lerpSafe(unselected, selected, t))
         }
     }
 }

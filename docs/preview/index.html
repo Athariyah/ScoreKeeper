@@ -6,56 +6,33 @@
 <title>ScoreKeeper — превью «Хоткеи» и тёмной темы</title>
 <style>
   /* ────────────────────────────────────────────────────────────────
-     Статичное превью изменений: окно «ХОТКЕИ» и тёмная палитра.
-     Это не часть приложения — только страница для проверки глазами.
-     Геометрия и цвета взяты из тех же макетов, что и в Kotlin-коде.
+     Статичное превью: как приложение рисует окно «ХОТКЕИ» и верхнюю
+     полосу экрана матча. Все координаты — из макетов:
+       · карточка 794×564 (Frame 10.pdf)
+       · полоса 616×53 (Group 7.pdf)
+     Клавиши рисуются тем же способом, что и в Kotlin (параметрические
+     скругления + «ножки»), поэтому превью совпадает с приложением.
      ──────────────────────────────────────────────────────────────── */
-  @font-face {
-    font-family: "Aqum";
-    src: url("AqumTwo-Classic.ttf") format("truetype");
-  }
-  :root {
-    --light-bg: #f2f6fa;
-    --dark-window: #070f2b;
-    --dark-card: #141f31;
-    --dark-pill: #212e44;
-    --dark-gold: #dfaf24;
-    --dark-gold-soft: #ffca1e;
-    --dark-header: #e9f1f8;
-    --dark-section: #5994c2;
-    --blue: #2070f5;
-    --ink: #101010;
-    --key-ink: #222222;
-    --key-face: #ffffff;
-    --key-base: #d7dfe2;
-  }
+  @font-face { font-family: "Aqum"; src: url("AqumTwo-Classic.ttf") format("truetype"); }
   * { box-sizing: border-box; }
   body {
-    margin: 0;
+    margin: 0; padding: 28px;
     font-family: "Aqum", "Segoe UI", system-ui, sans-serif;
-    background: #0d1526;
-    color: #fff;
-    padding: 28px;
+    background: #0d1526; color: #fff;
   }
-  h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: .5px; }
-  p.note { margin: 0 0 26px; color: #93a7c4; font-size: 14px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  p.note { margin: 0 0 24px; color: #93a7c4; font-size: 14px; }
+  .caption { font-size: 13px; color: #93a7c4; letter-spacing: .6px; margin: 18px 0 8px; }
 
-  .row { display: flex; gap: 34px; flex-wrap: wrap; align-items: flex-start; }
-  .stack { display: flex; flex-direction: column; gap: 16px; }
-  .caption { font-size: 13px; color: #93a7c4; letter-spacing: .6px; }
-
-  /* ── Бэкдроп как в приложении: затемнённый экран матча ── */
+  /* сцена 1920×1080 в масштабе 1:1 — всё позиционируем в координатах макета */
   .stage {
-    position: relative;
-    width: 900px; height: 560px;
-    border-radius: 22px;
-    overflow: hidden;
+    position: relative; width: 1920px; height: 1080px;
+    transform-origin: top left; overflow: hidden;
     background:
       radial-gradient(120% 90% at 15% 10%, #264b39 0%, transparent 55%),
       radial-gradient(90% 80% at 85% 15%, #12223b 0%, transparent 60%),
       radial-gradient(120% 90% at 70% 90%, #3a2a12 0%, transparent 60%),
       linear-gradient(140deg, #1d3350, #0a1526 60%);
-    box-shadow: 0 26px 60px rgba(0,0,0,.45);
   }
   .stage.light {
     background:
@@ -64,379 +41,253 @@
       radial-gradient(120% 90% at 70% 90%, #f7eebc 0%, transparent 60%),
       linear-gradient(140deg, #eef4fa, #e2ecf7 60%);
   }
+  .frame { width: 900px; height: 506px; overflow: hidden; border-radius: 18px;
+           box-shadow: 0 24px 60px rgba(0,0,0,.45); }
+  .frame .stage { transform: scale(.46875); }
   .dim { position: absolute; inset: 0; background: rgba(0,0,0,.52); }
 
-  /* ── Карточка «ХОТКЕИ» ── */
+  /* ── карточка «ХОТКЕИ» 794×564 ── */
   .panel {
-    position: absolute; left: 50%; top: 50%;
-    transform: translate(-50%,-50%);
-    width: 794px; height: 564px;
-    border-radius: 50px;
-    background: #fff;
-    border: 3px solid #e2eef7;
-    color: var(--ink);
-    padding: 14px 0 0;
-    box-shadow: 0 30px 70px rgba(0,0,0,.35);
+    position: absolute; left: 563px; top: 258px;   /* центр сцены */
+    width: 794px; height: 564px; border-radius: 50px;
+    background: #fff; color: #101010;
+    box-shadow: 0 0 41px 0 rgba(0,0,0,.25);
   }
-  .panel.dark { background: var(--dark-card); border-color: #22314a; color: var(--dark-header); }
-  .panel h2 {
-    margin: 0; text-align: center;
-    font-size: 46px; font-weight: normal;
-    color: var(--blue);
-    letter-spacing: 1px;
+  .panel.dark { background: #141f31; color: #e9f1f8; }
+  .panel .abs { position: absolute; }
+
+  .title {
+    left: 296px; top: 37.1px;
+    font-size: 45.6px; line-height: 1; letter-spacing: 0;
+    color: #2070f5;
+    -webkit-text-stroke: 2px #e2eef7;
+    paint-order: stroke fill;
   }
-  .panel.dark h2 { color: var(--dark-gold); }
+  .dark .title { color: #dfaf24; -webkit-text-stroke-color: #141f31; }
+  .header {
+    font-size: 23.3px; line-height: 1; color: #2070f5;
+    -webkit-text-stroke: 2px #e2eef7; paint-order: stroke fill;
+  }
+  .dark .header { color: #dfaf24; -webkit-text-stroke-color: #141f31; }
+  .divider { left: 396px; top: 123px; width: 2px; height: 400px; background: #e2eef7; }
+  .dark .divider { background: #22314a; }
+
   .back {
-    position: absolute; right: 25px; top: 25px;
-    width: 55px; height: 55px; border-radius: 50%;
+    left: 711px; top: 22px; width: 61px; height: 61px; border-radius: 50%;
     background: #fff; border: 3px solid #e3f0f9;
     display: grid; place-items: center;
   }
-  .back svg { width: 26px; height: 26px; }
-  .panel.dark .back { background: #1b2a40; border-color: #2c3d5a; }
+  .dark .back { background: #141f31; border-color: #dfaf24; }
+  .back svg { width: 30px; height: 24px; }
+  .back path { stroke: #06326d; }
+  .dark .back path { stroke: #dfaf24; }
 
-  .cols { display: flex; gap: 43px; padding: 34px 34px 0; }
-  .col { width: 344px; }
-  .col + .col { margin-left: 30px; }
-  .divider {
-    width: 2px; height: 404px; background: #e4f0f8; margin-top: 18px;
-  }
-  .panel.dark .divider { background: #22314a; }
-  .col h3 {
-    margin: 0 0 20px; font-weight: normal; font-size: 27px;
-    text-align: center; color: var(--blue); letter-spacing: .5px;
-  }
-  .panel.dark .col h3 { color: var(--dark-gold); }
+  /* клавиша: рисуется как в Kotlin — подошва, корпус, колпашка, ножки */
+  .key { position: absolute; }
+  .key .lbl { position: absolute; white-space: pre-line; font-size: 13.9px; line-height: 18.2px; }
 
-  .hk { display: flex; align-items: center; gap: 14px; height: 44px; margin-bottom: 8px;
-        border-radius: 14px; padding-left: 10px; cursor: pointer;
-        transition: background .18s ease, transform .18s ease; }
-  .hk:hover { background: rgba(32,112,245,.07); transform: scale(1.012); }
-  .panel.dark .hk:hover { background: rgba(255,255,255,.05); }
-  .hk .label { font-size: 20px; line-height: 24px; white-space: pre-line; }
-  .panel.dark .hk .label { color: var(--dark-gold); }
+  /* ── верхняя полоса 616×53 ── */
+  .strip { position: absolute; left: 1193px; top: 26px; width: 616px; height: 53px; }
+  .strip svg { position: absolute; inset: 0; overflow: visible; }
+  .strip .txt { position: absolute; line-height: 1; white-space: nowrap; }
 
-  /* ── Клавиша: колпашка + «подошва» + скошенные бока ── */
-  .key {
-    position: relative; flex: 0 0 auto;
-    height: 46px; min-width: 46px;
-    border: 3px solid var(--key-ink);
-    border-radius: 10.5px;
-    background: var(--key-base);
-    display: grid; place-items: center;
-    transition: transform .08s ease, box-shadow .18s ease, background .18s ease;
-  }
-  .key .face {
-    position: absolute; inset: 2px 2.6px 11px;
-    background: var(--key-face);
-    border: 2.6px solid var(--key-ink);
-    border-radius: 7.5px;
-  }
-  .key .glyph {
-    position: relative; z-index: 2;
-    font-size: 25px; color: var(--key-ink);
-    transform: translateY(-5px);
-  }
-  .key .glyph.small { font-size: 13px; }
-  .key .glyph.mid { font-size: 11.5px; }
-  .key.pressed { background: #b9c6cf; transform: translateY(2px); }
-  .key.pressed .face { inset: 4px 3.4px 9px; }
-  .key.pressed::after {
-    content: ""; position: absolute; inset: -3px; border-radius: 12px;
-    box-shadow: 0 0 0 4px rgba(32,112,245,.35);
-  }
-  .panel.dark .key { --key-ink: #e9f1f8; --key-face: #1b2a40; --key-base: #0f1b2d; }
-  .panel.dark .key.pressed::after { box-shadow: 0 0 0 4px rgba(223,175,36,.45); }
-
-  /* ── Кнопка «ХОТКЕИ» в верхней панели ── */
-  .topbar { position: absolute; right: 34px; top: 26px; display: flex; align-items: center; gap: 14px; }
-  .chip {
-    display: flex; align-items: center; gap: 7px;
-    height: 38px; padding: 0 14px; border-radius: 19px;
-    background: var(--dark-card); color: var(--dark-gold);
-    font-size: 19px; cursor: pointer; user-select: none;
-    transition: transform .12s ease;
-  }
-  .chip:active { transform: scale(.93); }
-  .chip .mini { width: 20px; height: 20px; position: relative; }
-  .chip .mini::before {
-    content: ""; position: absolute; inset: 1px 2px 6px;
-    border: 2.1px solid currentColor; border-radius: 4px;
-  }
-  .chip .mini::after {
-    content: "H"; position: absolute; left: 0; right: 0; top: 0;
-    font-size: 9px; text-align: center; line-height: 14px;
-  }
-  .topbar .sep { width: 2px; height: 36px; background: #1d2a42; }
-  .topbar .timer { font-size: 22px; color: var(--dark-gold); }
-  .topbar .gear {
-    width: 54px; height: 54px; border-radius: 50%;
-    background: var(--dark-card); display: grid; place-items: center;
-    color: var(--dark-gold); font-size: 24px;
-  }
-  .topbar .backpill {
-    display: flex; align-items: center; gap: 10px;
-    height: 49px; padding: 0 26px; border-radius: 24.5px;
-    background: var(--dark-card); color: var(--dark-gold); font-size: 22px;
-  }
-
-  /* ── Мини-макет экрана матча в тёмной теме ── */
-  .screen { width: 900px; height: 560px; border-radius: 22px; position: relative; overflow: hidden;
-            background: linear-gradient(150deg,#0b1730,#070f2b 55%,#0a1b2c); }
-  .screen .sport { position: absolute; left: 630px; top: 60px; }
-  .screen .sport .ttl { font-size: 44px; color: var(--dark-header); letter-spacing: 1px; }
-  .screen .sport .sub { font-size: 24px; color: #6e93b8; margin-top: 6px; }
-  .card {
-    position: absolute; left: 600px; top: 190px; width: 278px; height: 168px;
-    border-radius: 26px; background: var(--dark-card); padding: 18px 16px;
-  }
-  .card .line { display: flex; align-items: center; gap: 10px; height: 46px; }
-  .card .dot { width: 34px; height: 34px; border-radius: 50%; background: #d9d9d9; }
-  .card .name { font-size: 18px; color: var(--dark-gold); flex: 1; }
-  .card .plus { background: #69db7c; color: #37474d; font-size: 15px; padding: 4px 9px; border-radius: 12px; }
-  .card .pts { background: var(--dark-pill); color: #c7d6ea; font-size: 16px; padding: 5px 9px; border-radius: 13px; }
-  .status { margin-top: 12px; display: flex; align-items: center; gap: 6px; font-size: 13px; color: #7be39b;
-            background: rgba(255,255,255,.06); border-radius: 12px; padding: 5px 10px; width: max-content; margin-left: auto; margin-right: auto; }
-  .status i { width: 8px; height: 8px; border-radius: 50%; background: #7be39b; display: block; }
-  .actions { position: absolute; left: 600px; top: 384px; display: grid; gap: 10px; width: 278px; }
-  .actions .two { display: flex; gap: 10px; }
-  .ghost {
-    flex: 1; height: 40px; border-radius: 20px; background: var(--dark-card);
-    border: 2px solid var(--dark-gold); color: var(--dark-gold);
-    display: grid; place-items: center; font-size: 15px;
-  }
-  .cta { height: 46px; border-radius: 23px; background: linear-gradient(120deg,#e8bb2e,#dfaf24);
-         color: var(--dark-card); display: grid; place-items: center; font-size: 16px; }
-  .board {
-    position: absolute; left: 26px; top: 40px; width: 540px; height: 330px;
-    border-radius: 20px; border: 7px solid #efc32a; overflow: hidden;
-    background: #070f2b;
-  }
-  .board .diag1 { position: absolute; inset: 0;
-    background: linear-gradient(120deg, rgba(42,82,152,.6) 0 48%, transparent 48%); }
-  .board .diag2 { position: absolute; inset: 0;
-    background: linear-gradient(60deg, transparent 0 42%, rgba(186,12,36,.9) 42%); }
-  .board .team { position: absolute; top: 40px; width: 150px; text-align: center; color: #fff; }
-  .board .team .logo { width: 76px; height: 76px; border-radius: 50%; background: #d9d9d9; margin: 0 auto 8px; }
-  .board .team .nm { font-size: 17px; }
-  .board .team .sets { font-size: 30px; margin-top: 6px; }
-  .board .team .pts { font-size: 66px; line-height: 1; }
-  .board .t1 { left: 28px; } .board .t2 { right: 28px; }
-  .board .mid { position: absolute; left: 226px; top: 96px; color: #fff; text-align: center;
-                background: rgba(255,255,255,.1); border-radius: 10px; padding: 4px 8px; font-size: 16px; }
-  .legend { display:flex; gap:18px; margin-top:12px; font-size:13px; color:#93a7c4; flex-wrap: wrap;}
-  .legend b { color:#dfaf24; font-weight: normal; }
+  /* ── пояснения ── */
+  .legend { display: flex; gap: 18px; margin-top: 14px; font-size: 13px; color: #93a7c4; flex-wrap: wrap; }
+  .legend b { color: #dfaf24; font-weight: normal; }
+  .row { display: flex; gap: 34px; flex-wrap: wrap; align-items: flex-start; }
 </style>
 </head>
 <body>
-  <h1>ScoreKeeper — что изменилось</h1>
+  <h1>ScoreKeeper — окно «ХОТКЕИ» и верхняя полоса экрана матча</h1>
   <p class="note">
-    Статичное превью (не приложение): окно «ХОТКЕИ», кнопка вызова в верхней панели и тёмная палитра
-    из макетов. Наведите курсор на строку со клавишей и нажмите — клавиша «просядет», как в анимации.
+    Превью рисует те же фигуры и в тех же координатах, что и приложение:
+    карточка 794×564 и полоса 616×53 из макетов. Слева — светлая тема, справа — тёмная.
   </p>
 
   <div class="row">
-    <div class="stack">
+    <div>
       <div class="caption">1 · ОКНО «ХОТКЕИ» — СВЕТЛАЯ ТЕМА</div>
-      <div class="stage light">
+      <div class="frame"><div class="stage light" id="stage-light">
         <div class="dim"></div>
-        <div class="panel">
-          <h2>ХОТКЕИ</h2>
-          <div class="back">
-            <svg viewBox="0 0 55 55"><path d="M41.3 28H14.7M24.7 18L14.7 28l10 10" fill="none"
-              stroke="#06326D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-          <div class="cols">
-            <div class="col">
-              <h3>КНОПКИ МАТЧА</h3>
-              <div class="hk"><div class="key"><div class="face"></div><div class="glyph">1</div></div><div class="label">ДОБАВИТЬ ОЧКО
-КОМАНДЕ 1</div></div>
-              <div class="hk"><div class="key"><div class="face"></div><div class="glyph">2</div></div><div class="label">ДОБАВИТЬ ОЧКО
-КОМАНДЕ 2</div></div>
-              <div class="hk"><div class="key"><div class="face"></div><div class="glyph">−</div></div><div class="label">ОТКАТ</div></div>
-              <div class="hk"><div class="key" style="min-width:62px"><div class="face"></div>
-                <svg class="glyph" width="26" height="18" style="position:relative;transform:translateY(-5px)">
-                  <path d="M4 9h12M16 9l-4-4M16 9l-4 4M22 3v12" stroke="#222" stroke-width="2.4"
-                        fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-                <div class="label">КОРРЕКТИРОВКА</div></div>
-              <div class="hk"><div class="key" style="min-width:62px"><div class="face"></div>
-                <svg class="glyph" width="26" height="18" style="position:relative;transform:translateY(-5px)">
-                  <path d="M13 3H3v12h10l7-6z" stroke="#222" stroke-width="2.2" fill="none" stroke-linejoin="round"/>
-                  <path d="M7 7l5 4M12 7l-5 4" stroke="#222" stroke-width="2.2" stroke-linecap="round"/></svg></div>
-                <div class="label">СБРОС</div></div>
-              <div class="hk"><div class="key" style="min-width:154px"><div class="face"></div>
-                <svg class="glyph" width="26" height="18" style="position:relative;transform:translateY(-5px)">
-                  <path d="M20 4v8H6M6 12l4-4M6 12l4 4" stroke="#222" stroke-width="2.6"
-                        fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-                <div class="label">НАЧАТЬ/
-ПРОДОЛЖИТЬ/
-ЗАВЕРШИТЬ МАТЧ</div></div>
-            </div>
-            <div class="divider"></div>
-            <div class="col">
-              <h3>ОСНОВНЫЕ</h3>
-              <div class="hk"><div class="key"><div class="face"></div><div class="glyph">H</div></div><div class="label">НАЗАД</div></div>
-              <div class="hk"><div class="key"><div class="face"></div><div class="glyph mid">Esc</div></div><div class="label">НАЗАД</div></div>
-              <div class="hk"><div class="key"><div class="face"></div><div class="glyph">~</div></div><div class="label">НАСТРОЙКИ</div></div>
-              <div class="hk"><div class="key"><div class="face"></div><div class="glyph small">F1</div></div><div class="label">ЗАКРЫТЬ
-ПРИЛОЖЕНИЕ</div></div>
-              <div class="hk"><div class="key"><div class="face"></div><div class="glyph small">F2</div></div><div class="label">СВЕРНУТЬ
-ПРИЛОЖЕНИЕ</div></div>
-              <div class="hk"><div class="key" style="min-width:62px"><div class="face"></div>
-                <svg class="glyph" width="26" height="18" style="position:relative;transform:translateY(-5px)">
-                  <path d="M21 4v8H7M7 12l4-4M7 12l4 4" stroke="#222" stroke-width="2.6"
-                        fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-                <div class="label">ГОТОВО/
-ПОДТВЕРДИТЬ</div></div>
-            </div>
-          </div>
-        </div>
-      </div>
+        <div class="panel" id="panel-light"></div>
+      </div></div>
     </div>
-
-    <div class="stack">
+    <div>
       <div class="caption">2 · ОКНО «ХОТКЕИ» — ТЁМНАЯ ТЕМА</div>
-      <div class="stage" style="width:900px">
+      <div class="frame"><div class="stage" id="stage-dark">
         <div class="dim"></div>
-        <div class="panel dark">
-          <h2>ХОТКЕИ</h2>
-          <div class="back">
-            <svg viewBox="0 0 55 55"><path d="M41.3 28H14.7M24.7 18L14.7 28l10 10" fill="none"
-              stroke="#e9f1f8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-          <div class="cols">
-            <div class="col">
-              <h3>КНОПКИ МАТЧА</h3>
-              <div class="hk"><div class="key"><div class="face"></div><div class="glyph">1</div></div><div class="label">ДОБАВИТЬ ОЧКО
-КОМАНДЕ 1</div></div>
-              <div class="hk"><div class="key"><div class="face"></div><div class="glyph">2</div></div><div class="label">ДОБАВИТЬ ОЧКО
-КОМАНДЕ 2</div></div>
-              <div class="hk"><div class="key"><div class="face"></div><div class="glyph">−</div></div><div class="label">ОТКАТ</div></div>
-              <div class="hk"><div class="key" style="min-width:62px"><div class="face"></div>
-                <svg class="glyph" width="26" height="18" style="position:relative;transform:translateY(-5px)">
-                  <path d="M4 9h12M16 9l-4-4M16 9l-4 4M22 3v12" stroke="#e9f1f8" stroke-width="2.4"
-                        fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-                <div class="label">КОРРЕКТИРОВКА</div></div>
-              <div class="hk"><div class="key" style="min-width:62px"><div class="face"></div>
-                <svg class="glyph" width="26" height="18" style="position:relative;transform:translateY(-5px)">
-                  <path d="M13 3H3v12h10l7-6z" stroke="#e9f1f8" stroke-width="2.2" fill="none" stroke-linejoin="round"/>
-                  <path d="M7 7l5 4M12 7l-5 4" stroke="#e9f1f8" stroke-width="2.2" stroke-linecap="round"/></svg></div>
-                <div class="label">СБРОС</div></div>
-              <div class="hk"><div class="key" style="min-width:154px"><div class="face"></div>
-                <svg class="glyph" width="26" height="18" style="position:relative;transform:translateY(-5px)">
-                  <path d="M20 4v8H6M6 12l4-4M6 12l4 4" stroke="#e9f1f8" stroke-width="2.6"
-                        fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-                <div class="label">НАЧАТЬ/
-ПРОДОЛЖИТЬ/
-ЗАВЕРШИТЬ МАТЧ</div></div>
-            </div>
-            <div class="divider"></div>
-            <div class="col">
-              <h3>ОСНОВНЫЕ</h3>
-              <div class="hk"><div class="key"><div class="face"></div><div class="glyph">H</div></div><div class="label">НАЗАД</div></div>
-              <div class="hk"><div class="key"><div class="face"></div><div class="glyph mid">Esc</div></div><div class="label">НАЗАД</div></div>
-              <div class="hk"><div class="key"><div class="face"></div><div class="glyph">~</div></div><div class="label">НАСТРОЙКИ</div></div>
-              <div class="hk"><div class="key"><div class="face"></div><div class="glyph small">F1</div></div><div class="label">ЗАКРЫТЬ
-ПРИЛОЖЕНИЕ</div></div>
-              <div class="hk"><div class="key"><div class="face"></div><div class="glyph small">F2</div></div><div class="label">СВЕРНУТЬ
-ПРИЛОЖЕНИЕ</div></div>
-              <div class="hk"><div class="key" style="min-width:62px"><div class="face"></div>
-                <svg class="glyph" width="26" height="18" style="position:relative;transform:translateY(-5px)">
-                  <path d="M21 4v8H7M7 12l4-4M7 12l4 4" stroke="#e9f1f8" stroke-width="2.6"
-                        fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-                <div class="label">ГОТОВО/
-ПОДТВЕРДИТЬ</div></div>
-            </div>
-          </div>
-        </div>
-      </div>
+        <div class="panel dark" id="panel-dark"></div>
+      </div></div>
     </div>
   </div>
 
-  <div class="row" style="margin-top:34px">
-    <div class="stack">
-      <div class="caption">3 · ЭКРАН МАТЧА В ТЁМНОЙ ТЕМЕ + КНОПКА «ХОТКЕИ» В ПАНЕЛИ</div>
-      <div class="screen">
-        <div class="topbar">
-          <div class="chip"><span>ХОТКЕИ</span><span class="mini"></span></div>
-          <div class="sep"></div>
-          <div class="timer">00:00</div>
-          <div class="sep"></div>
-          <div class="gear">⚙</div>
-          <div class="sep"></div>
-          <div class="backpill"><span style="font-size:20px">←</span><span>НАЗАД</span></div>
-        </div>
-        <div class="board">
-          <div class="diag1"></div><div class="diag2"></div>
-          <div class="team t1">
-            <div class="logo"></div><div class="nm">КОМАНДА 1</div>
-            <div class="sets">2</div><div style="font-size:14px;opacity:.8">ПАРТИИ</div>
-            <div class="pts">24</div><div style="font-size:15px;opacity:.8">ОЧКИ</div>
-          </div>
-          <div class="team t2">
-            <div class="logo"></div><div class="nm">КОМАНДА 2</div>
-            <div class="sets">1</div><div style="font-size:14px;opacity:.8">ПАРТИИ</div>
-            <div class="pts">20</div><div style="font-size:15px;opacity:.8">ОЧКИ</div>
-          </div>
-          <div class="mid">ПАРТИЯ 3</div>
-        </div>
-        <div class="sport">
-          <div class="ttl">ВОЛЕЙБОЛ</div>
-          <div class="sub">Счёт матча</div>
-        </div>
-        <div class="card">
-          <div class="line"><span class="dot"></span><span class="name">КОМАНДА 1</span>
-            <span class="plus">+1</span><span class="pts">00</span></div>
-          <div class="line" style="border-top:1px solid rgba(255,255,255,.08)">
-            <span class="dot"></span><span class="name">КОМАНДА 2</span>
-            <span class="plus">+1</span><span class="pts">00</span></div>
-          <div class="status"><i></i>В процессе</div>
-        </div>
-        <div class="actions">
-          <div class="two"><div class="ghost">↻ СБРОС</div><div class="ghost">◀◀ ОТКАТ</div></div>
-          <div class="ghost" style="flex:none">🗓 КОРРЕКТИРОВКА</div>
-          <div class="cta">◼ ЗАВЕРШИТЬ МАТЧ</div>
-        </div>
-      </div>
-      <div class="legend">
-        <span><b>ХОТКЕИ</b> — открывает окно подсказок</span>
-        <span><b>1 / 2</b> — очко</span>
-        <span><b>−</b> — откат</span>
-        <span><b>Tab</b> — корректировка</span>
-        <span><b>Backspace</b> — сброс</span>
-        <span><b>Enter</b> — старт/финиш</span>
-        <span><b>~</b> — настройки</span>
-        <span><b>F1 / F2</b> — закрыть / свернуть</span>
-        <span><b>H, Esc</b> — назад</span>
-      </div>
-    </div>
+  <div class="caption">3 · ВЕРХНЯЯ ПОЛОСА ЭКРАНА МАТЧА (616×53) — СВЕТЛАЯ И ТЁМНАЯ</div>
+  <div class="frame" style="height: 200px; background: #eef4fa;">
+    <div style="position: relative; width: 616px; height: 53px; margin: 30px 0 0 34px;" id="strip-light"></div>
+    <div style="position: relative; width: 616px; height: 53px; margin: 40px 0 0 34px;" id="strip-dark"></div>
+  </div>
+
+  <div class="legend">
+    <span><b>Клик</b> по строке в приложении выполняет действие клавиши и закрывает окно</span>
+    <span><b>Esc / H</b> — назад, <b>~</b> — настройки, <b>F1</b> — закрыть, <b>F2</b> — свернуть</span>
+    <span><b>1 / 2</b> — очко, <b>−</b> — откат, <b>Tab</b> — корректировка, <b>⌫</b> — сброс, <b>Enter</b> — старт/готово</span>
   </div>
 
 <script>
-  // Нажатие на строку — короткая анимация «просевшей» клавиши (как в приложении).
-  document.querySelectorAll('.hk').forEach(function (row) {
-    row.addEventListener('mousedown', function () {
-      var key = row.querySelector('.key');
-      if (!key) return;
-      key.classList.add('pressed');
-      setTimeout(function () { key.classList.remove('pressed'); }, 130);
-    });
-  });
-  document.querySelectorAll('.chip').forEach(function (chip) {
-    chip.addEventListener('mousedown', function () { chip.style.transform = 'scale(.93)'; });
-    chip.addEventListener('mouseup', function () { chip.style.transform = ''; });
-    chip.addEventListener('mouseleave', function () { chip.style.transform = ''; });
-    // клик по кнопке «ХОТКЕИ» показывает/скрывает окно в превью
-    chip.addEventListener('click', function () {
-      var panels = document.querySelectorAll('.panel');
-      var hidden = panels[0].style.opacity === '0';
-      panels.forEach(function (p) {
-        p.style.transition = 'opacity .18s ease, transform .18s ease';
-        p.style.opacity = hidden ? '1' : '0';
-        p.style.transform = hidden ? 'translate(-50%,-50%)' : 'translate(-50%,-48%)';
-      });
-    });
-  });
+// ── геометрия из макетов ───────────────────────────────────────────────
+const CARD = { w: 794, h: 564 };
+const LEFT = [
+  { key: [37, 152, 47.04], text: [97, 176.2], label: "ДОБАВИТЬ ОЧКО\nКОМАНДЕ 1", glyph: "1" },
+  { key: [37, 211.7, 47.04], text: [97, 236.4], label: "ДОБАВИТЬ ОЧКО\nКОМАНДЕ 2", glyph: "2" },
+  { key: [37, 271, 47.04], text: [97, 300.5], label: "ОТКАТ", glyph: "–" },
+  { key: [37, 330, 69], text: [117.7, 361.1], label: "КОРРЕКТИРОВКА", glyph: "corr" },
+  { key: [37, 392, 81], text: [133, 420.8], label: "СБРОС", glyph: "reset" },
+  { key: [37, 455, 155], text: [207, 472.2], label: "НАЧАТЬ/\nПРОДОЛЖИТЬ/\nЗАВЕРШИТЬ МАТЧ", glyph: "enterWide" },
+];
+const RIGHT = [
+  { key: [431.9, 157, 47.04], text: [493.1, 186.1], label: "НАЗАД", glyph: "H" },
+  { key: [431.9, 217, 47.04], text: [493.1, 246.1], label: "НАЗАД", glyph: "Esc" },
+  { key: [431.9, 277, 47.04], text: [493.1, 304.1], label: "НАСТРОЙКИ", glyph: "~" },
+  { key: [431.9, 337, 47.04], text: [492.5, 357], label: "ЗАКРЫТЬ\nПРИЛОЖЕНИЕ", glyph: "F1" },
+  { key: [431.9, 397, 47.04], text: [492.5, 417], label: "СВЕРНУТЬ\nПРИЛОЖЕНИЕ", glyph: "F2" },
+  { key: [431.9, 459, 47.04], text: [536.9, 483.5], label: "ГОТОВО/\nПОДТВЕРДИТЬ", glyph: "enterSmall" },
+];
+
+// клавиша: те же слои, что в drawKeycap()
+function keySVG(w, dark) {
+  const ink = dark ? "#e9f1f8" : "#222222";
+  const face = dark ? "#1b2a40" : "#ffffff";
+  const base = dark ? "#0f1b2d" : "#d7dfe2";
+  const H = 49.31;
+  const fl = 9.1, ft = 0.7, fw = w - 18.2, fh = 30.6;
+  const legY = ft + fh, legB = H - 3.4;
+  return `<svg width="${w}" height="51.7" viewBox="0 0 ${w} 51.7">
+    <rect x="0" y="2.4" width="${w}" height="${H - 1.8}" rx="10.8" fill="${base}"/>
+    <rect x="1.7" y="0" width="${w - 3.4}" height="${H - 3.7}" rx="10.2" fill="${base}"/>
+    <rect x="${fl}" y="${ft}" width="${fw}" height="${fh}" rx="4.9" fill="${face}"/>
+    <rect x="0.9" y="0.9" width="${w - 1.8}" height="${H - 1.8}" rx="10.2"
+          fill="none" stroke="${ink}" stroke-width="2"/>
+    <rect x="${fl}" y="${ft}" width="${fw}" height="${fh}" rx="4.9"
+          fill="none" stroke="${ink}" stroke-width="1.7"/>
+    <path d="M${fl + 0.4} ${legY} L9.2 ${legB} M${fl + fw - 0.4} ${legY} L${w - 9.2} ${legB}"
+          stroke="${ink}" stroke-width="2.2" stroke-linecap="round"/>
+  </svg>`;
+}
+
+function glyphSVG(g, w, dark) {
+  const ink = dark ? "#e9f1f8" : "#222222";
+  const gold = dark ? "#dfaf24" : "#2070f5";
+  const cx = w / 2, cy = 0.7 + 30.6 / 2;
+  if (g === "corr") {
+    return `<svg width="${w}" height="51.7" style="position:absolute;left:0;top:0">
+      <g stroke="${ink}" stroke-width="2.2" stroke-linecap="round" fill="none">
+        <path d="M${cx - 11} ${cy} h13 M${cx + 2} ${cy} l-4 -4 M${cx + 2} ${cy} l-4 4"/>
+        <path d="M${cx + 8.5} ${cy - 5} v10"/>
+      </g></svg>`;
+  }
+  if (g === "reset") {
+    return `<svg width="${w}" height="51.7" style="position:absolute;left:0;top:0">
+      <g stroke="${ink}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+        <path d="M${cx + 9} ${cy - 6.5} h-9 v13 h9"/>
+        <path d="M${cx - 3} ${cy - 3} l6 6 M${cx + 3} ${cy - 3} l-6 6"/>
+      </g></svg>`;
+  }
+  if (g === "enterWide") {
+    return `<svg width="${w}" height="51.7" style="position:absolute;left:0;top:0">
+      <path d="M${cx + 8} ${cy - 4} v4.6 H${cx - 7} M${cx - 3} ${cy - 3.2} l-4 3.8 4 3.8"
+            stroke="${ink}" stroke-width="2.4" fill="none"
+            stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  }
+  if (g === "enterSmall") {
+    return `<svg width="${w}" height="51.7" style="position:absolute;left:0;top:0">
+      <path d="M${cx + 8} ${cy - 4} v4.6 H${cx - 7} M${cx - 3} ${cy - 3.2} l-4 3.8 4 3.8"
+            stroke="${ink}" stroke-width="2.4" fill="none"
+            stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  }
+  const size = g === "Esc" ? 9.5 : (g === "F1" || g === "F2") ? 11.5 : 22;
+  return `<div class="abs" style="left:0;top:${cy}px;width:${w}px;text-align:center;
+            transform:translateY(-50%);font-size:${size}px;line-height:1;color:${ink}">${g}</div>`;
+}
+
+function renderPanel(el, dark) {
+  const parts = [];
+  parts.push(`<div class="abs title">ХОТКЕИ</div>`);
+  parts.push(`<div class="abs header" style="left:96px;top:107.2px">КНОПКИ МАТЧА</div>`);
+  parts.push(`<div class="abs header" style="left:520px;top:107.2px">ОСНОВНЫЕ</div>`);
+  parts.push(`<div class="abs divider"></div>`);
+  parts.push(`<div class="abs back"><svg viewBox="0 0 30 24">
+      <path d="M29 12H1M9 2L1 12l8 10" fill="none" stroke-width="3.4"
+            stroke-linecap="round" stroke-linejoin="round"/></svg></div>`);
+  for (const r of LEFT.concat(RIGHT)) {
+    const [kx, ky, kw] = r.key;
+    parts.push(`<div class="key" style="left:${kx}px;top:${ky}px;width:${kw}px">
+        ${keySVG(kw, dark)}${glyphSVG(r.glyph, kw, dark)}</div>`);
+    const [tx, ty] = r.text;
+    parts.push(`<div class="abs lbl" style="left:${tx}px;top:${ty - 13.9 * 1.0}px">${r.label}</div>`);
+  }
+  el.innerHTML = parts.join("");
+}
+
+renderPanel(document.getElementById("panel-light"), false);
+renderPanel(document.getElementById("panel-dark"), true);
+
+// ── верхняя полоса 616×53 ─────────────────────────────────────────────
+const CHIP_PILL = "M10 5 h113 a10 10 0 0 1 10 10 v22 a10 10 0 0 1 -10 10 h-113 a10 10 0 0 1 -10 -10 v-22 a10 10 0 0 1 10 -10 z";
+const COG = `M374.9 28.57c.07-.5.1-1.02.1-1.57 0-.53-.03-1.07-.12-1.57l3.39-2.63a.73.73 0 0 0 .2-.47
+  .73.73 0 0 0-.08-.55l-3.2-5.53a.72.72 0 0 0-.43-.36.73.73 0 0 0-.56 0l-3.98 1.6a10.6 10.6 0 0 0-2.7-1.56
+  L367 11.68a.75.75 0 0 0-.27-.49.75.75 0 0 0-.53-.19h-6.4c-.4 0-.72.28-.78.68l-.6 4.24c-.99.4-1.89.95-2.7 1.56
+  l-3.99-1.6a.72.72 0 0 0-.98.37l-3.18 5.53a.68.68 0 0 0 .2.47l3.38 2.63c-.08.5-.15 1.05-.15 1.57s.03 1.07.12 1.57
+  l-3.39 2.63a.73.73 0 0 0-.28.47.73.73 0 0 0 .08.55l3.2 5.53c.2.37.62.48.99.37l3.98-1.6c.83.63 1.72 1.16 2.7 1.56
+  l.6 4.24c.08.4.4.68.8.68h6.4c.4 0 .73-.28.78-.68l.6-4.24c.99-.4 1.89-.93 2.7-1.56l3.99 1.6c.36.13.78 0 .98-.37
+  l3.2-5.53a.7.7 0 0 0-.2-.55l-3.35-2.63z M363 33a6 6 0 1 1 0-12 6 6 0 0 1 0 12z`;
+const TIMER = `M186 8.67h-10V12h10z M179.33 30.33h3.34v-10h-3.34z
+  M192.72 19.32l2.36-2.37a23 23 0 0 0-2.35-2.35l-2.36 2.37A14.6 14.6 0 0 0 181 13.67
+  c-8.28 0-15 6.71-15 15s6.7 15 15 15c2.82 0 5.59-.8 7.98-2.3a14.9 14.9 0 0 0 5.54-6.19
+  c1.22-2.55 1.7-5.39 1.38-8.19a14.9 14.9 0 0 0-3.18-7.67z
+  M181 40.33a11.67 11.67 0 1 1 0-23.33 11.67 11.67 0 0 1 0 23.33z`;
+
+function stripSVG(dark) {
+  const chipBg = dark ? "#141f31" : "#E6F3FD";
+  const chipInk = dark ? "#dfaf24" : "#475D74";
+  const timerInk = dark ? "#dfaf24" : "#465B72";
+  const cogInk = dark ? "#dfaf24" : "#06326D";
+  const pillBg = dark ? "#141f31" : "#FBFCFD";
+  const pillStroke = dark ? "#dfaf24" : "#E3F0F9";
+  const divider = dark ? "#212e44" : "#E2EEF7";
+  return `<svg width="616" height="53" viewBox="0 0 616 53">
+    ${[141, 311, 413].map(x => `<rect x="${x}" y="0" width="2" height="52" rx="1" fill="${divider}"/>`).join("")}
+    <path d="${CHIP_PILL}" fill="${chipBg}"/>
+    <g transform="translate(96 12) scale(1)">
+      <rect x="0.6" y="14.2" width="25.7" height="13.1" rx="5.4" fill="${chipInk}" opacity=".30"/>
+      <rect x="0.6" y="0.6" width="25.7" height="26.4" rx="5.6" fill="none" stroke="${chipInk}" stroke-width="2.2"/>
+      <rect x="5.6" y="5.2" width="15.7" height="12.4" rx="2.6" fill="none" stroke="${chipInk}" stroke-width="1.7"/>
+      <path d="M6 17.6 L3.5 24.6 M20.9 17.6 L23.4 24.6" stroke="${chipInk}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M9.3 8 h0 M9.3 8 v6.8 M17.6 8 v6.8 M9.3 11.4 h8.3"
+            stroke="${chipInk}" stroke-width="2.1" stroke-linecap="round" fill="none"/>
+    </g>
+    <path d="${TIMER}" fill="${timerInk}"/>
+    <ellipse cx="363" cy="26.5" rx="26" ry="25.5" fill="${chipBg}"/>
+    <path d="${COG}" fill="${cogInk}"/>
+    <rect x="439" y="0" width="177" height="53" rx="26.5" fill="${pillBg}" stroke="${pillStroke}" stroke-width="2"/>
+    <path d="M498.5 27H476.5M484.75 19L476.5 27L484.75 35" fill="none" stroke="${cogInk}"
+          stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+function stripText(dark) {
+  const chipInk = dark ? "#dfaf24" : "#475D74";
+  const timerInk = dark ? "#dfaf24" : "#465B72";
+  const backInk = dark ? "#dfaf24" : "#21386A";
+  return `
+    <div class="txt" style="left:8.75px;top:21px;font-size:18.5px;color:${chipInk}">ХОТКЕИ</div>
+    <div class="txt" style="left:210.86px;top:18px;font-size:22.6px;color:${timerInk}">00:00</div>
+    <div class="txt" style="left:525px;top:19.5px;font-size:14.8px;color:${backInk}">НАЗАД</div>`;
+}
+
+for (const [id, dark] of [["strip-light", false], ["strip-dark", true]]) {
+  const el = document.getElementById(id);
+  el.innerHTML = stripSVG(dark) + stripText(dark);
+}
 </script>
 </body>
 </html>
