@@ -316,11 +316,11 @@ private fun runApp() = application {
 
         hotkeyPulse.fire(id)
 
-        val back = id == HotkeyId.BACK_F11 || id == HotkeyId.BACK_ESC
+        val back = id == HotkeyId.BACK_H || id == HotkeyId.BACK_ESC
         val overlayOpen = showSetupDialog || showSettings || showVolleyballSettings ||
             showUpdatePrompt || confirmExit
 
-        // 1) Открытый диалог экрана сам решает, что делать (Enter = «готово», Esc = «назад»).
+        // 1) Открытый диалог экрана сам решает, что делать (Enter = «готово», Esc/H = «назад»).
         if (!overlayOpen && HotkeyRouter.dispatchToDialog(id)) return true
 
         // 3) Оверлеи поверх экрана (настройки, настройка команд, правила матча, обновление):
@@ -340,6 +340,11 @@ private fun runApp() = application {
         // 4) Общие действия окна. F1 не выходит из приложения сразу, а показывает то же
         //    подтверждение, что и кнопка «закрыть» — иначе матч можно потерять одним нажатием.
         when (id) {
+            // H открывает окно «ХОТКЕИ» (эта клавиша нарисована в верхней полосе экрана матча).
+            HotkeyId.BACK_H -> {
+                showHotkeys = true
+                return true
+            }
             HotkeyId.CLOSE_APP -> {
                 closeRequest()
                 return true
@@ -365,15 +370,15 @@ private fun runApp() = application {
         state = windowState, undecorated = true,
         onPreviewKeyEvent = { event ->
             val id = HotkeyKeys.toHotkey(event) ?: return@Window false
-            // Пока курсор в поле ввода, не мешаем печатать: пропускаем всё, кроме Enter и Esc.
+            // Пока курсор в поле ввода, не мешаем печатать: пропускаем всё, кроме Enter и «назад».
             if (HotkeyRouter.textInputFocused && id != HotkeyId.DONE &&
-                id != HotkeyId.BACK_ESC && id != HotkeyId.BACK_F11
+                id != HotkeyId.BACK_ESC && id != HotkeyId.BACK_H
             ) {
                 return@Window false
             }
-            // Окно «ХОТКЕИ»: Esc / F11 его закрывают, остальные клавиши только «нажимаются»
+            // Окно «ХОТКЕИ»: H / Esc его закрывают, остальные клавиши только «нажимаются»
             // в списке (без действий) — см. handleHotkey.
-            if (showHotkeys && (id == HotkeyId.BACK_F11 || id == HotkeyId.BACK_ESC)) {
+            if (showHotkeys && (id == HotkeyId.BACK_H || id == HotkeyId.BACK_ESC)) {
                 hotkeyPulse.fire(id)
                 showHotkeys = false
                 return@Window true
@@ -1127,6 +1132,17 @@ private fun ServeCoin(
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
         )
+        // Кольцо на PNG светло-голубое (#9EC8E2). В тёмной теме макет требует #22314A,
+        // поэтому поверх картинки (в той же полосе 0.46…0.50 радиуса) рисуем своё кольцо.
+        Canvas(Modifier.fillMaxSize()) {
+            val r = size.minDimension
+            drawCircle(
+                color = coinRing(ScoreKeeperTheme.colors),
+                radius = r * 0.48f,
+                center = Offset(r / 2f, r / 2f),
+                style = Stroke(width = r * 0.041f),
+            )
+        }
     }
 }
 
@@ -1789,8 +1805,8 @@ private fun VolleyballSettingsDialog(
         DisposableEffect(draft) {
             HotkeyRouter.dialogHandler = { id ->
                 when (id) {
-                    HotkeyId.DONE, HotkeyId.START_MATCH -> { onConfirm(draft); true }
-                    HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> { onBack(); true }
+                    HotkeyId.DONE -> { onConfirm(draft); true }
+                    HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { onBack(); true }
                     else -> false
                 }
             }
@@ -1897,8 +1913,8 @@ private fun TossDialogOverlay(
     DisposableEffect(serverSel) {
         HotkeyRouter.dialogHandler = { id ->
             when (id) {
-                HotkeyId.DONE, HotkeyId.START_MATCH -> { onConfirm(serverSel); true }
-                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> { onBack(); true }
+                HotkeyId.DONE -> { onConfirm(serverSel); true }
+                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { onBack(); true }
                 else -> false
             }
         }
@@ -1953,8 +1969,8 @@ private fun TextDialogOverlay(
     DisposableEffect(textInput) {
         HotkeyRouter.dialogHandler = { id ->
             when (id) {
-                HotkeyId.DONE, HotkeyId.START_MATCH -> { onDisplay(textInput); true }
-                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> { onBack(); true }
+                HotkeyId.DONE -> { onDisplay(textInput); true }
+                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { onBack(); true }
                 else -> false
             }
         }
@@ -2036,8 +2052,8 @@ private fun CorrectionDialogOverlay(
     DisposableEffect(t1Score, t2Score, t1Sets, t2Sets, serverSel, selectedCourtSide) {
         HotkeyRouter.dialogHandler = { id ->
             when (id) {
-                HotkeyId.DONE, HotkeyId.START_MATCH -> { submit(); true }
-                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> { onBack(); true }
+                HotkeyId.DONE -> { submit(); true }
+                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { onBack(); true }
                 else -> false
             }
         }
@@ -2147,8 +2163,8 @@ private fun CloseMatchConfirmationDialog(
     DisposableEffect(isSubmitting) {
         HotkeyRouter.dialogHandler = { id ->
             when (id) {
-                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> { onBack(); true }
-                HotkeyId.DONE, HotkeyId.START_MATCH -> { if (!isSubmitting) onConfirm(); true }
+                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { onBack(); true }
+                HotkeyId.DONE -> { if (!isSubmitting) onConfirm(); true }
                 else -> false
             }
         }
@@ -2212,8 +2228,8 @@ private fun ExitConfirmationDialog(
     DisposableEffect(Unit) {
         HotkeyRouter.dialogHandler = { id ->
             when (id) {
-                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> { onCancel(); true }
-                HotkeyId.DONE, HotkeyId.START_MATCH -> { onConfirm(); true }
+                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { onCancel(); true }
+                HotkeyId.DONE -> { onConfirm(); true }
                 else -> false
             }
         }
@@ -2423,11 +2439,11 @@ fun VoleyballScreen(
         when {
             showExitConfirmationDialog -> when (id) {
                 HotkeyId.DONE -> { /* подтверждение закрытия — только кнопкой */ false }
-                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> { showExitConfirmationDialog = false; true }
+                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { showExitConfirmationDialog = false; true }
                 else -> false
             }
             anyDialogOpen -> when (id) {
-                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> {
+                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> {
                     showTossDialog = false
                     showTextDialog = false
                     showCorrectionDialog = false
@@ -2442,7 +2458,7 @@ fun VoleyballScreen(
                 HotkeyId.CORRECTION -> { showCorrectionDialog = true; true }
                 HotkeyId.RESET -> { resetScoreAction(); true }
                 HotkeyId.START_MATCH, HotkeyId.DONE -> { endMatchAction(); true }
-                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> {
+                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> {
                     showExitConfirmationDialog = true
                     closeMatchError = null
                     true
@@ -2452,12 +2468,12 @@ fun VoleyballScreen(
             match.status == "NOT_STARTED" -> when (id) {
                 HotkeyId.START_MATCH, HotkeyId.DONE -> { startMatchAction(); true }
                 HotkeyId.UNDO, HotkeyId.RESET, HotkeyId.CORRECTION -> false
-                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> { onBack(); true }
+                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { onBack(); true }
                 else -> false
             }
             else -> when (id) { // FINISHED — счёт ещё не сохранён, спрашиваем подтверждение
                 HotkeyId.START_MATCH, HotkeyId.DONE -> { continueMatchAction(); true }
-                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> {
+                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> {
                     showExitConfirmationDialog = true
                     closeMatchError = null
                     true

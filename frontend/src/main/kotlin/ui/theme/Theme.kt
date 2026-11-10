@@ -129,9 +129,11 @@ val LightColors = ScoreKeeperColors(
     buttonEnd = Color(0xFF6B8EC7),
     buttonGlow = Color(0xFF2171F4),
     onButton = Color.White,
-    iconButtonBg = Color(0xFFE3F2FD),
-    iconButtonBgHover = Color(0xFFCFE5FB),
-    iconButtonFg = Color(0xFF05306E),
+    // Кнопки настроек, сворачивания и закрытия на главном экране — по макету:
+    // тёмно-синий круг #141F31 с жёлтым знаком #FFC300 (в тёмной теме — золото макета).
+    iconButtonBg = Color(0xFF141F31),
+    iconButtonBgHover = Color(0xFF1E2A3F),
+    iconButtonFg = Color(0xFFFFC300),
     titleTop = Color(0xFF03020A),
     titleBottom = Color(0xFF0F0F7F),
     titleGlow = Color(0xFF2171F4),
@@ -193,7 +195,9 @@ val DarkColors = ScoreKeeperColors(
     onButton = Color.White,
     iconButtonBg = Color(0xFF1D2A42),
     iconButtonBgHover = Color(0xFF27395C),
-    iconButtonFg = Color(0xFFDCE6FF),
+    // Знак кнопок «свернуть/настройки/закрыть» на главном экране — #FFC300 вместо
+    // прежнего светло-голубого #DCE6FF (как на макете).
+    iconButtonFg = Color(0xFFFFC300),
     titleTop = Color(0xFFF2F6FF),
     titleBottom = Color(0xFF7C9BFF),
     titleGlow = Color(0xFF2171F4),
@@ -231,7 +235,8 @@ val DarkColors = ScoreKeeperColors(
     highlightBorder = Color(0xFFC79A18),
     tabFill = Dark.Pill,
     previewStrip = Dark.Window,
-    fieldStroke = Color(0xFF35507A),
+    // обводки полей ввода в тёмной теме — #22314A (правило раунда 6: вместо #9EC8E2)
+    fieldStroke = Color(0xFF22314A),
     dangerText = Color(0xFFFF7A8A),
     isLightSurface = false,
     bodyText = Dark.HeaderText,
@@ -253,6 +258,18 @@ private fun resourceExists(path: String): Boolean =
 
 private val clearSansLoaded = resourceExists("fonts/ClearSans-Bold.ttf")
 private val aqumLoaded = resourceExists("fonts/AqumTwo-Classic.ttf")
+// «Esc» на клавише в макете набран Blogger Sans Medium. Файл кладётся в
+//   frontend/src/main/resources/fonts/
+// Имя может быть любым из списка ниже (часто скачивают с пробелом в названии).
+// Если файла ещё нет, берётся Aqum (или системный шрифт) — приложение не падает.
+private val bloggerCandidates = listOf(
+    "fonts/BloggerSans-Medium.ttf",
+    "fonts/Blogger Sans Medium.ttf",
+    "fonts/BloggerSansMedium.ttf",
+    "fonts/BloggerSans.ttf",
+    "fonts/Blogger Sans.ttf",
+)
+private val bloggerPath: String? = bloggerCandidates.firstOrNull { resourceExists(it) }
 
 private val ClearSans: FontFamily =
     if (clearSansLoaded) FontFamily(Font("fonts/ClearSans-Bold.ttf", FontWeight.Bold))
@@ -261,6 +278,10 @@ private val ClearSans: FontFamily =
 private val AqumTwo: FontFamily =
     if (aqumLoaded) FontFamily(Font("fonts/AqumTwo-Classic.ttf", FontWeight.Normal))
     else FontFamily.SansSerif
+
+/** Шрифт подписи «Esc» на клавише (Blogger Sans Medium из макета). */
+internal val KeyLabelFamily: FontFamily =
+    bloggerPath?.let { FontFamily(Font(it, FontWeight.Medium)) } ?: AqumTwo
 
 /** Системный Arial — шрифт табло для зрителей (экран предпросмотра). Если Arial
  *  в системе нет, Compose подставит ближайший системный sans-serif. */

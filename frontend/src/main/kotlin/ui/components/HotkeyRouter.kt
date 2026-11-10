@@ -73,7 +73,7 @@ object HotkeyKeys {
         when (key) {
             Key.F1 -> return HotkeyId.CLOSE_APP
             Key.F2 -> return HotkeyId.MINIMIZE
-            Key.F11 -> return HotkeyId.BACK_F11
+            Key.F11 -> return HotkeyId.BACK_H
             else -> Unit
         }
 
@@ -87,8 +87,13 @@ object HotkeyKeys {
             Key.Minus, Key.NumPadSubtract -> return if (shift) null else HotkeyId.UNDO
             Key.Tab -> return HotkeyId.CORRECTION
             Key.Backspace, Key.Delete -> return HotkeyId.RESET
+            // Пробел — старт/продолжить/завершить матч (широкая клавиша макета).
+            Key.Spacebar -> return if (shift) null else HotkeyId.START_MATCH
             Key.Enter, Key.NumPadEnter -> return HotkeyId.DONE
             Key.Escape -> return HotkeyId.BACK_ESC
+            // H — окно «ХОТКЕИ» (эта клавиша нарисована в верхней полосе экрана матча).
+            // Физическая клавиша, поэтому на русской раскладке («Р») работает так же.
+            Key.H -> return if (shift) null else HotkeyId.BACK_H
             else -> Unit
         }
 

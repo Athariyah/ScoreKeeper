@@ -35,19 +35,21 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ui.theme.KeyLabelFamily
 import ui.theme.ScoreKeeperTheme
 
 // ───────────────────────── Хоткеи: идентификаторы и группы ─────────────────────────
 //
 // Горячие клавиши — ровно те, что в макете «Хоткеи.pdf»:
-//   матч:   1 / 2 — очко команде 1 / 2, «−», →| (корректировка), ⊠ (сброс), Enter (старт/финиш);
-//   общие:  F11 и Esc — назад, ~ — настройки, F1 — закрыть, F2 — свернуть, Enter — готово.
+//   матч:   1 / 2 — очко команде 1 / 2, «−», →| (корректировка), ⊠ (сброс), пробел (старт/финиш);
+//   общие:  H — окно «ХОТКЕИ» и «назад», Esc — назад, ~ — настройки, F1 — закрыть, F2 — свернуть.
 // В окне подсказок они же работают как кнопки (см. HotkeysOverlay).
 //
 // Вся геометрия снята из присланных макетов (Frame 10.pdf — карточка 794×564,
@@ -61,7 +63,7 @@ enum class HotkeyId {
     CORRECTION,
     RESET,
     START_MATCH,
-    BACK_F11,
+    BACK_H,
     BACK_ESC,
     SETTINGS,
     CLOSE_APP,
@@ -163,12 +165,12 @@ internal fun matchRows(): List<HotkeyRow> = listOf(
     HotkeyRow(HotkeyId.UNDO, KeyGlyph.Minus, 37f, 271f, 48f, 97f, 300.5f) { it.hotkeyUndo },
     HotkeyRow(HotkeyId.CORRECTION, KeyGlyph.Correction, 37f, 330f, 69f, 117.7f, 361.1f) { it.hotkeyCorrection },
     HotkeyRow(HotkeyId.RESET, KeyGlyph.Reset, 37f, 392f, 81f, 133f, 420.8f) { it.hotkeyReset },
-    HotkeyRow(HotkeyId.START_MATCH, KeyGlyph.EnterWide, 37f, 455f, 155f, 207f, 472.2f) { it.hotkeyStartMatch },
+    HotkeyRow(HotkeyId.START_MATCH, KeyGlyph.Space, 37f, 455f, 155f, 207f, 472.2f) { it.hotkeyStartMatch },
 )
 
 /** Правая колонка — «ОСНОВНЫЕ». */
 internal fun mainRows(): List<HotkeyRow> = listOf(
-    HotkeyRow(HotkeyId.BACK_F11, KeyGlyph.LetterF11, 431.9f, 157f, 48f, 493.1f, 186.1f) { it.hotkeyBack },
+    HotkeyRow(HotkeyId.BACK_H, KeyGlyph.LetterH, 431.9f, 157f, 48f, 493.1f, 186.1f) { it.hotkeyBack },
     HotkeyRow(HotkeyId.BACK_ESC, KeyGlyph.Esc, 431.9f, 217f, 48f, 493.1f, 246.1f) { it.hotkeyBack },
     HotkeyRow(HotkeyId.SETTINGS, KeyGlyph.Tilde, 431.9f, 277f, 48f, 493.1f, 304.1f) { it.hotkeySettings },
     HotkeyRow(HotkeyId.CLOSE_APP, KeyGlyph.F1, 431.9f, 337f, 48f, 492.5f, 357f) { it.hotkeyCloseApp },
@@ -212,8 +214,8 @@ private const val BODY_BOTTOM = 47.31f
 
 /** Что нарисовано внутри «колпашки» клавиши. */
 enum class KeyGlyph {
-    Digit1, Digit2, Minus, Correction, Reset, EnterWide,
-    LetterF11, Esc, Tilde, F1, F2, EnterSmall,
+    Digit1, Digit2, Minus, Correction, Reset, EnterWide, Space,
+    LetterH, Esc, Tilde, F1, F2, EnterSmall,
 }
 
 /** «1» — цифра из SVG. */
@@ -227,20 +229,20 @@ private const val GLYPH_1 =
 
 /** «2» — вторая цифра, тот же шрифтовой контур, что и у «1». */
 private const val GLYPH_2 =
-    "M28.1 12.05C28.1 13 27.75 13.78 27.05 14.35C26.35 14.92 25.32 15.4 23.96 15.79" +
-        "C22.42 16.23 21.5 16.55 21.2 16.75L27.1 16.75C27.52 16.75 27.85 16.9 28.09 17.2" +
-        "C28.32 17.5 28.44 17.86 28.44 18.28C28.44 18.7 28.32 19.06 28.09 19.36" +
-        "C27.85 19.66 27.52 19.81 27.1 19.81L19.7 19.81C19.28 19.81 18.95 19.66 18.71 19.36" +
-        "C18.47 19.06 18.35 18.7 18.35 18.28C18.35 16.72 19.1 15.5 20.6 14.62" +
-        "C21.25 14.27 22.1 13.98 23.15 13.75C24 13.55 24.55 13.28 24.8 12.95" +
-        "C24.95 12.76 25.02 12.52 25.02 12.23C25.02 11.72 24.74 11.28 24.18 10.91" +
-        "C23.62 10.54 22.94 10.36 22.14 10.36C21.5 10.36 20.86 10.49 20.23 10.75" +
-        "C19.6 11.01 19.14 11.31 18.85 11.65C18.6 11.94 18.3 12.09 17.95 12.1" +
-        "C17.6 12.11 17.29 12 17.02 11.77C16.75 11.53 16.6 11.24 16.57 10.9" +
-        "C16.54 10.56 16.65 10.25 16.9 9.98C17.53 9.26 18.36 8.7 19.39 8.29" +
-        "C20.42 7.88 21.45 7.67 22.48 7.67C23.15 7.67 23.84 7.76 24.55 7.94" +
-        "C25.26 8.12 25.9 8.38 26.47 8.72C27.06 9.07 27.46 9.5 27.68 10.01" +
-        "C27.96 10.65 28.1 11.33 28.1 12.05Z"
+        "M30.06 15.31C30.06 16.68 29.60 17.81 28.69 18.63C27.77 19.45 26.43 20.14 24.65 20.71" +
+        "C22.64 21.34 21.44 21.80 21.05 22.09L28.75 22.09C29.30 22.09 29.73 22.31 30.04 22.74" +
+        "C30.34 23.17 30.50 23.69 30.50 24.29C30.50 24.90 30.34 25.42 30.04 25.85" +
+        "C29.73 26.28 29.30 26.50 28.75 26.50L19.09 26.50C18.54 26.50 18.11 26.28 17.80 25.85" +
+        "C17.49 25.42 17.33 24.90 17.33 24.29C17.33 22.05 18.31 20.29 20.27 19.02" +
+        "C21.12 18.51 22.22 18.10 23.60 17.76C24.70 17.48 25.42 17.09 25.75 16.61" +
+        "C25.94 16.34 26.04 15.99 26.04 15.57C26.04 14.84 25.67 14.20 24.94 13.67" +
+        "C24.21 13.14 23.32 12.88 22.28 12.88C21.44 12.88 20.61 13.07 19.78 13.44" +
+        "C18.96 13.81 18.36 14.25 17.98 14.74C17.66 15.16 17.26 15.37 16.81 15.39" +
+        "C16.35 15.40 15.95 15.24 15.59 14.91C15.24 14.56 15.05 14.15 15.01 13.66" +
+        "C14.97 13.17 15.11 12.72 15.44 12.33C16.26 11.29 17.34 10.48 18.69 9.89" +
+        "C20.03 9.30 21.38 9.00 22.72 9.00C23.60 9.00 24.50 9.13 25.42 9.39" +
+        "C26.35 9.65 27.18 10.02 27.93 10.51C28.70 11.02 29.22 11.64 29.51 12.37" +
+        "C29.87 13.30 30.06 14.28 30.06 15.31"
 
 /** «−» (откат) — толстая черта со скруглёнными концами. */
 private const val GLYPH_MINUS =
@@ -258,21 +260,32 @@ private const val GLYPH_RESET =
     "M29.54 17.85L36.04 9.85H51.54V25.85H36.04L29.54 17.85Z" +
         "M41.04 14.75L44.14 17.85M44.14 17.85L47.24 20.95M44.14 17.85L47.24 14.75M44.14 17.85L41.04 20.95"
 
-/** ↵ на широкой клавише «старт/продолжить/завершить» (ширина 155). */
-private const val GLYPH_ENTER_WIDE =
-    "M88.3 9.85V20.35H70.3M75.7 25.55L70.3 20.35L75.7 15.15"
+/**
+ * Пробел (SVG space 156×52): «скоба» 62.54…92.54, 16.05…23.55. Ширины в карточке 155,
+ * поэтому символ центрируется по «колпашке» — см. [keyArtShift].
+ */
+private const val GLYPH_SPACE =
+    "M62.54 16.05V23.55H92.54V16.05"
 
-/** ↵ на обычной клавише (ширина 48, SVG enter). */
-private const val GLYPH_ENTER_SMALL =
-    "M28.6 12.6V22.4H19.4M23 17.4L19.4 22.4L23 27.4"
+/** ↵ (SVG enter 90×52): 53.54…35.54 по X, 9.85…25.55 по Y. */
+private const val GLYPH_ENTER =
+    "M53.54 9.85V20.35H35.54M40.94 25.55L35.54 20.35L40.94 15.15"
 
-/** Готовый символ: заливка, обводка или текст. */
+/**
+ * Готовый символ клавиши.
+ *
+ * [fill] — путь с заливкой, [stroke] — путь с обводкой, [text] — подпись шрифтом.
+ * [centerX] — центр символа по X в координатах SVG (см. замеры bbox): по нему символ
+ * ставится в центр «колпашки» любой ширины (48 / 69 / 81 / 155).
+ */
 private class KeyArt(
     val fill: String? = null,
     val stroke: String? = null,
     val strokeWidth: Float = 3.6f,
     val text: String? = null,
     val textSize: Float = 0f,
+    val centerX: Float = KEY_BASE_W / 2f,
+    val keyFont: Boolean = false,
 )
 
 /** Символ клавиши. */
@@ -280,15 +293,17 @@ private fun keyArt(glyph: KeyGlyph): KeyArt = when (glyph) {
     KeyGlyph.Digit1 -> KeyArt(fill = GLYPH_1)
     KeyGlyph.Digit2 -> KeyArt(fill = GLYPH_2)
     KeyGlyph.Minus -> KeyArt(fill = GLYPH_MINUS)
-    KeyGlyph.Correction -> KeyArt(stroke = GLYPH_CORRECTION)
-    KeyGlyph.Reset -> KeyArt(stroke = GLYPH_RESET, strokeWidth = 2.9f)
-    KeyGlyph.EnterWide -> KeyArt(stroke = GLYPH_ENTER_WIDE)
-    KeyGlyph.EnterSmall -> KeyArt(stroke = GLYPH_ENTER_SMALL)
-    KeyGlyph.LetterF11 -> KeyArt(text = "F11", textSize = 12.6f)
-    KeyGlyph.Esc -> KeyArt(text = "ESC", textSize = 12f)
-    KeyGlyph.Tilde -> KeyArt(text = "~", textSize = 22f)
-    KeyGlyph.F1 -> KeyArt(text = "F1", textSize = 12.6f)
-    KeyGlyph.F2 -> KeyArt(text = "F2", textSize = 12.6f)
+    // центры символов посчитаны по bbox путей (см. константы выше)
+    KeyGlyph.Correction -> KeyArt(stroke = GLYPH_CORRECTION, centerX = 34.39f)
+    KeyGlyph.Reset -> KeyArt(stroke = GLYPH_RESET, strokeWidth = 2.9f, centerX = 40.54f)
+    KeyGlyph.EnterWide -> KeyArt(stroke = GLYPH_ENTER, centerX = 44.54f)
+    KeyGlyph.Space -> KeyArt(stroke = GLYPH_SPACE, centerX = 77.54f)
+    KeyGlyph.EnterSmall -> KeyArt(stroke = GLYPH_ENTER, centerX = 44.54f)
+    KeyGlyph.LetterH -> KeyArt(text = "H", textSize = 26f)
+    KeyGlyph.Esc -> KeyArt(text = "Esc", textSize = 12.5f, keyFont = true)
+    KeyGlyph.Tilde -> KeyArt(text = "~", textSize = 24f)
+    KeyGlyph.F1 -> KeyArt(text = "F1", textSize = 13f)
+    KeyGlyph.F2 -> KeyArt(text = "F2", textSize = 13f)
 }
 
 /**
@@ -377,12 +392,11 @@ internal fun DrawScope.drawKeycap(
             style = Stroke(width = 2f, join = StrokeJoin.Round),
         )
 
-        // 5) символ; у широких клавиш он центрируется по «колпашке»
-        val artShift = when (glyph) {
-            KeyGlyph.Correction, KeyGlyph.Reset, KeyGlyph.EnterWide -> 0f
-            else -> (w - KEY_BASE_W) / 2f
-        }
-        withTransform({ translate(artShift, 0f) }) {
+        // 5) символ клавиши.
+        //    translate на dy — ключевое: при нажатии клавиша «проседает», и символ
+        //    (буква или знак) едет вместе с корпусом, а не остаётся на месте.
+        val artShift = w / 2f - art.centerX
+        withTransform({ translate(artShift, dy) }) {
             when {
                 art.fill != null -> drawPath(PathParser().parsePathString(art.fill).toPath(), ink)
                 art.stroke != null -> drawPath(
@@ -391,13 +405,31 @@ internal fun DrawScope.drawKeycap(
                     style = Stroke(width = art.strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round),
                 )
                 art.text != null -> {
-                    val style = keyStyle.copy(fontSize = art.textSize.sp, color = ink)
-                    val layout = measurer.measure(AnnotatedString(art.text), style)
+                    val family = if (art.keyFont) KeyLabelFamily else keyStyle.fontFamily
+                    val style = keyStyle.copy(
+                        fontFamily = family,
+                        // Blogger Sans Medium объявлен с весом Medium — просим ровно его,
+                        // иначе движок подберёт другой вес и подпись «поедет».
+                        fontWeight = if (art.keyFont) FontWeight.Medium else keyStyle.fontWeight,
+                        fontSize = art.textSize.sp,
+                        color = ink,
+                    )
+                    // Подпись обязана влезть в «колпашку» при любом шрифте: если с выбранным
+                    // кеглем она шире колпашки, кегль уменьшается пропорционально.
+                    val capW = w - 2f * CAP_LEFT - 3f
+                    var layout = measurer.measure(AnnotatedString(art.text), style)
+                    if (layout.size.width > capW && layout.size.width > 0) {
+                        val fitted = style.copy(
+                            fontSize = (art.textSize * capW / layout.size.width).sp,
+                        )
+                        layout = measurer.measure(AnnotatedString(art.text), fitted)
+                    }
+                    // подпись центрируем по колпашке: у шрифта своя высота строки
                     drawText(
                         textLayoutResult = layout,
                         color = ink,
                         topLeft = Offset(
-                            x = KEY_BASE_W / 2f - layout.size.width / 2f,
+                            x = w / 2f - layout.size.width / 2f,
                             y = CAP_TOP + (CAP_BOTTOM - CAP_TOP) / 2f - layout.size.height / 2f,
                         ),
                     )

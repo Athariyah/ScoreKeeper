@@ -1,5 +1,10 @@
 package ui.screens
 
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
@@ -28,8 +33,6 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
@@ -129,12 +132,31 @@ internal fun MatchTopBar(
     val backPill = remember { PathParser().parsePathString(BACK_PILL_PATH).toPath() }
     val backArrow = remember { PathParser().parsePathString(TOP_BAR_ARROW_PATH).toPath() }
     val chipPill = remember { PathParser().parsePathString(CHIP_PILL_PATH).toPath() }
-    // вспышки пилюли «ХОТКЕИ» и шестерёнки при нажатии H/Esc/~/F1/F2
+    // Вспышка пилюли «ХОТКЕИ» — только когда нажата её собственная клавиша H
+    // (Esc/F11 — это «назад», они подсвечивают пилюлю справа).
     val chipFlash = rememberHotkeyFlash(
-        if (pulseId == HotkeyId.BACK_F11 || pulseId == HotkeyId.BACK_ESC) pulseTick else 0L,
+        if (pulseId == HotkeyId.BACK_H) pulseTick else 0L,
     )
     val cogFlash = rememberHotkeyFlash(
         if (pulseId == HotkeyId.SETTINGS) pulseTick else 0L,
+    )
+
+    // Та же анимация, что у круглых кнопок на главном экране: на наведение шестерёнка
+    // увеличивается и проворачивается, на нажатие — пружинисто проседает.
+    val cogInteraction = remember { MutableInteractionSource() }
+    val cogHovered by cogInteraction.collectIsHoveredAsState()
+    val cogPressed by cogInteraction.collectIsPressedAsState()
+    val cogHover = animateFloatAsState(
+        targetValue = if (cogHovered) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = 350f),
+        label = "cogHover",
+    )
+    val cogPressSpec: AnimationSpec<Float> =
+        if (cogPressed) tween(70) else spring(dampingRatio = 0.45f, stiffness = 500f)
+    val cogPress = animateFloatAsState(
+        targetValue = if (cogPressed) 1f else 0f,
+        animationSpec = cogPressSpec,
+        label = "cogPress",
     )
 
     Box(modifier.size(TOP_BAR_WIDTH.dp, TOP_BAR_HEIGHT.dp)) {
@@ -151,7 +173,7 @@ internal fun MatchTopBar(
                     drawPath(chipPill, chipInk.copy(alpha = 0.18f * safeT(chipFlash)))
                 }
                 drawPath(chipPill, chipBg)
-                drawMiniKeycap(chipInk, Offset(96f, 12f), measurer, type.pillLabel)
+                drawMiniKeycap(chipInk, Offset(96f, 12f))
                 // таймер
                 drawPath(timerSpan, timerInk)
                 // шестерёнка
@@ -159,7 +181,14 @@ internal fun MatchTopBar(
                 if (cogFlash > 0.01f) {
                     drawPath(cogCircle, cogInk.copy(alpha = 0.22f * safeT(cogFlash)))
                 }
-                drawPath(cogSpan, cogInk)
+                val cogScale = 1f + 0.14f * safeT(cogHover.value) - 0.12f * safeT(cogPress.value)
+                val cogTurn = 55f * safeT(cogHover.value)
+                withTransform({
+                    rotate(cogTurn, Offset(363f, 26.5f))
+                    scale(cogScale, cogScale, Offset(363f, 26.5f))
+                }) {
+                    drawPath(cogSpan, cogInk)
+                }
                 // пилюля «назад»
                 drawPath(backPill, pillBg)
                 drawPath(backPill, pillStroke, style = Stroke(width = 2f))
@@ -191,7 +220,7 @@ internal fun MatchTopBar(
 
         // ── зоны нажатия ──
         ClickArea(x = 0f, y = 5f, w = 133f, h = 42f, onClick = onHotkeys)
-        ClickArea(x = 337f, y = 1f, w = 52f, h = 51f, onClick = onSettings)
+        ClickArea(x = 337f, y = 1f, w = 52f, h = 51f, onClick = onSettings, interaction = cogInteraction)
         ClickArea(x = 439f, y = 0f, w = 177f, h = 53f, onClick = onBack)
     }
 }
@@ -200,47 +229,56 @@ internal fun MatchTopBar(
 private fun baselineTop(layout: TextLayoutResult, baseline: Float): Float =
     baseline - layout.firstBaseline
 
-/** Мини-клавиша «F11» в кнопке хоткеев (координаты от левого верхнего угла полосы). */
-private fun DrawScope.drawMiniKeycap(
-    ink: Color,
-    at: Offset,
-    measurer: TextMeasurer,
-    labelStyle: TextStyle,
-) {
+/**
+ * Мини-клавиша «H» в плашке «ХОТКЕИ» — по присланному SVG 27×29:
+ * подошва, корпус, белая колпашка, «ножки» к подошве и буква H.
+ * Координаты SVG уже в масштабе полосы (616×53), поэтому рисуем как есть.
+ */
+private fun DrawScope.drawMiniKeycap(ink: Color, at: Offset) {
     withTransform({ translate(at.x, at.y) }) {
-        // подошва 95.95…122.17, 13.47…41
+        // 1) подошва: 0.05…26.05 × 2.44…29, скругление 5.8
         drawRoundRect(
             color = ink.copy(alpha = 0.30f),
-            topLeft = Offset(0.6f, 14.2f),
-            size = Size(25.7f, 13.1f),
-            cornerRadius = CornerRadius(5.4f),
+            topLeft = Offset(0.05f, 2.44f),
+            size = Size(26f, 26.56f),
+            cornerRadius = CornerRadius(5.8f),
+        )
+        // 2) корпус
+        drawRoundRect(
+            color = ink.copy(alpha = 0.30f),
+            topLeft = Offset(1f, 1f),
+            size = Size(24.22f, 25.53f),
+            cornerRadius = CornerRadius(5.38f),
+        )
+        // 3) «ножки» к подошве (SVG: stroke 2)
+        drawLine(ink, Offset(2.04f, 17.72f), Offset(5.62f, 24.03f), 1f, StrokeCap.Butt)
+        drawLine(ink, Offset(24.4f, 18.03f), Offset(24.4f + 3.7f, 24.52f), 1f, StrokeCap.Butt)
+        // 4) контур корпуса и «колпашка»
+        drawRoundRect(
+            color = ink,
+            topLeft = Offset(1f, 1f),
+            size = Size(24.22f, 25.53f),
+            cornerRadius = CornerRadius(5.38f),
+            style = Stroke(width = 2f, join = StrokeJoin.Round),
+        )
+        drawRoundRect(
+            color = ink.copy(alpha = 0.18f),
+            topLeft = Offset(4.98f, 1f),
+            size = Size(16.32f, 17.25f),
+            cornerRadius = CornerRadius(2.9f),
         )
         drawRoundRect(
             color = ink,
-            topLeft = Offset(0.6f, 0.6f),
-            size = Size(25.7f, 26.4f),
-            cornerRadius = CornerRadius(5.6f),
-            style = Stroke(width = 2.2f, join = StrokeJoin.Round),
+            topLeft = Offset(4.98f, 1f),
+            size = Size(16.32f, 17.25f),
+            cornerRadius = CornerRadius(2.9f),
+            style = Stroke(width = 2f, join = StrokeJoin.Round),
         )
-        // «колпашка» внутри корпуса — как у объёмной клавиши в карточке
-        drawRoundRect(
-            color = ink,
-            topLeft = Offset(5.6f, 5.2f),
-            size = Size(15.7f, 12.4f),
-            cornerRadius = CornerRadius(2.6f),
-            style = Stroke(width = 1.7f, join = StrokeJoin.Round),
-        )
-        // «ножки» к подошве
-        val legY = 17.6f
-        drawLine(ink, Offset(6f, legY), Offset(3.5f, 24.6f), 1.8f, StrokeCap.Round)
-        drawLine(ink, Offset(20.9f, legY), Offset(23.4f, 24.6f), 1.8f, StrokeCap.Round)
-        // подпись F11 в «колпашке»
-        val layout = measurer.measure(AnnotatedString("F11"), labelStyle.copy(fontSize = 7.6.sp, color = ink))
-        drawText(
-            textLayoutResult = layout,
-            color = ink,
-            topLeft = Offset(13.45f - layout.size.width / 2f, 11.4f - layout.size.height / 2f),
-        )
+        // 5) буква H (SVG: вертикали и перекладина)
+        val hw = 1.9f
+        drawLine(ink, Offset(9.21f, 5f), Offset(9.21f, 14.8f), hw, StrokeCap.Round)
+        drawLine(ink, Offset(16.89f, 5f), Offset(16.89f, 14.8f), hw, StrokeCap.Round)
+        drawLine(ink, Offset(9.21f, 9.9f), Offset(16.89f, 9.9f), hw, StrokeCap.Round)
     }
 }
 
@@ -253,17 +291,20 @@ private fun formatClock(seconds: Int): String {
 /** Прозрачная зона нажатия внутри полосы (координаты макета 616×53). */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun ClickArea(x: Float, y: Float, w: Float, h: Float, onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
+private fun ClickArea(
+    x: Float,
+    y: Float,
+    w: Float,
+    h: Float,
+    onClick: () -> Unit,
+    interaction: MutableInteractionSource = remember { MutableInteractionSource() },
+) {
     val hovered by interaction.collectIsHoveredAsState()
     Box(
         Modifier
             .graphicsLayer {
                 translationX = x.dp.toPx()
                 translationY = y.dp.toPx()
-                val s = 1f + 0.03f * safeT(if (hovered) 1f else 0f)
-                scaleX = s
-                scaleY = s
             }
             .size(w.dp, h.dp)
             .hoverable(interaction)
