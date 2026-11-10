@@ -9,6 +9,10 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -97,6 +101,7 @@ import ui.theme.ArialFamily
 import ui.theme.RuStrings
 import ui.theme.DesignStage
 import ui.theme.LocalStage
+import ui.theme.ScoreKeeperColors
 import ui.theme.ScoreKeeperTheme
 import ui.theme.colorsFor
 import ui.theme.stringsFor
@@ -279,11 +284,17 @@ private fun runApp() = application {
     // Если матч уже идёт — предупреждаем, что прогресс потеряется.
     var confirmExit by remember { mutableStateOf(false) }
 
+    // Предупреждение о потере счёта нужно, если матч идёт или уже завершён (но не сохранён),
+    // и приложение сейчас на экране матча. До старта игры — закрываемся без вопросов.
+    val inMatchScreen = currentScreen == Screen.valeball || currentScreen == Screen.tennis
+    val matchNeedsExitWarning = inMatchScreen &&
+        (match.status == "IN_PROGRESS" || match.status == "FINISHED")
+
     /** Единая точка «закрыть приложение» для кнопки окна и горячей клавиши F1. */
     fun closeRequest() {
-        // В разгаре матча сначала спрашиваем: одним нажатием счёт не потерять.
-        val inMatchScreen = currentScreen == Screen.valeball || currentScreen == Screen.tennis
-        if (inMatchScreen && match.status == "IN_PROGRESS") {
+        // Матч идёт ИЛИ уже завершён — счёт ещё не сохранён в базу, поэтому спрашиваем
+        // подтверждение. Если игра не начиналась, закрываемся сразу.
+        if (matchNeedsExitWarning) {
             confirmExit = true
         } else {
             exitApplication()
@@ -292,26 +303,25 @@ private fun runApp() = application {
 
     /**
      * Обработка «горячей клавиши». Один путь и для клавиатуры, и для кликов по списку
-     * в окне подсказок — поэтому обе ветки гарантированно делают одно и то же.
-     * Возвращает true, если событие обработано.
+     * в окне подсказок. Возвращает true, если событие обработано.
      */
-    fun handleHotkey(id: HotkeyId, fromClick: Boolean): Boolean {
+    fun handleHotkey(id: HotkeyId): Boolean {
+        // Окно «ХОТКЕИ» — это подсказка, а не пульт: пока оно открыто, нажатия и клики только
+        // проигрывают анимацию клавиши. Никаких действий, запросов к API и закрытия окна —
+        // ровно то поведение, которое просили: показать, как нажимается клавиша.
+        if (showHotkeys) {
+            hotkeyPulse.fire(id)
+            return true
+        }
+
         hotkeyPulse.fire(id)
 
-        val back = id == HotkeyId.BACK_H || id == HotkeyId.BACK_ESC
+        val back = id == HotkeyId.BACK_F11 || id == HotkeyId.BACK_ESC
         val overlayOpen = showSetupDialog || showSettings || showVolleyballSettings ||
             showUpdatePrompt || confirmExit
 
         // 1) Открытый диалог экрана сам решает, что делать (Enter = «готово», Esc = «назад»).
         if (!overlayOpen && HotkeyRouter.dispatchToDialog(id)) return true
-
-        // 2) Окно подсказок: «назад» его закрывает, остальные клавиши работают как обычно —
-        //    клавиша в списке вспыхивает, действие выполняется, окно закрывается (см. п. 5),
-        //    чтобы результат был виден. Клик по строке ведёт себя точно так же.
-        if (showHotkeys && !fromClick && back) {
-            showHotkeys = false
-            return true
-        }
 
         // 3) Оверлеи поверх экрана (настройки, настройка команд, правила матча, обновление):
         //    пока они открыты, экранные хоткеи молчат, работает только «назад».
@@ -339,7 +349,6 @@ private fun runApp() = application {
                 return true
             }
             HotkeyId.SETTINGS -> {
-                showHotkeys = false
                 showSettings = true
                 return true
             }
@@ -347,10 +356,7 @@ private fun runApp() = application {
         }
 
         // 5) Экранные действия (очки, откат, корректировка, сброс, старт/финиш, «назад»).
-        val handled = HotkeyRouter.dispatchToScreen(id)
-        // Если действие выполнено из окна подсказок — окно закрываем, чтобы был виден результат.
-        if (handled && showHotkeys) showHotkeys = false
-        return handled
+        return HotkeyRouter.dispatchToScreen(id)
     }
 
     Window(
@@ -361,13 +367,18 @@ private fun runApp() = application {
             val id = HotkeyKeys.toHotkey(event) ?: return@Window false
             // Пока курсор в поле ввода, не мешаем печатать: пропускаем всё, кроме Enter и Esc.
             if (HotkeyRouter.textInputFocused && id != HotkeyId.DONE &&
-                id != HotkeyId.BACK_ESC && id != HotkeyId.BACK_H
+                id != HotkeyId.BACK_ESC && id != HotkeyId.BACK_F11
             ) {
                 return@Window false
             }
-            // Esc закрывает открытый диалог сам (у оверлеев своя кнопка «назад»), поэтому
-            // на экране матча отдаём «назад» экрану — он сам решит, что закрыть.
-            handleHotkey(id, fromClick = false)
+            // Окно «ХОТКЕИ»: Esc / F11 его закрывают, остальные клавиши только «нажимаются»
+            // в списке (без действий) — см. handleHotkey.
+            if (showHotkeys && (id == HotkeyId.BACK_F11 || id == HotkeyId.BACK_ESC)) {
+                hotkeyPulse.fire(id)
+                showHotkeys = false
+                return@Window true
+            }
+            handleHotkey(id)
         },
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -436,6 +447,7 @@ private fun runApp() = application {
             if (confirmExit) {
                 ExitConfirmationDialog(
                     language = language,
+                    matchInProgress = match.status == "IN_PROGRESS",
                     onCancel = { confirmExit = false },
                     onConfirm = {
                         confirmExit = false
@@ -460,7 +472,7 @@ private fun runApp() = application {
                     language = language,
                     pulse = hotkeyPulse,
                     onBack = { showHotkeys = false },
-                    onHotkey = { id -> handleHotkey(id, fromClick = true) },
+                    onHotkey = { id -> handleHotkey(id) },
                 )
             }
 
@@ -652,7 +664,11 @@ private val StatusRedDark = Color(0xFFFF8593)
 private val CoinGold = Color(0xFFFFD95D)
 private val CoinGoldDark = Color(0xFFC9992B)
 private val CoinGray = Color(0xFF848484)
+/** Обводка монет и стрелок стороны поля: в тёмной теме — #22314A, в светлой — голубая. */
 private val CoinRing = Color(0xFF9EC8E2)
+private val CoinRingDark = Color(0xFF22314A)
+
+private fun coinRing(colors: ScoreKeeperColors): Color = if (colors.dark) CoinRingDark else CoinRing
 
 /** Мягкая тень под карточками экрана матча (как в макете). */
 private fun Modifier.cardShadow(corner: Dp): Modifier = drawBehind {
@@ -1153,9 +1169,10 @@ private fun SideArrow(
             selected -> CoinGold
             else -> CoinGray
         }
+        val ring = coinRing(colors)
         withTransform({ scale(u, u, Offset.Zero) }) {
-            drawPath(linePath, CoinRing, style = Stroke(width = 13f, cap = StrokeCap.Round))
-            drawPath(outerPath, CoinRing)
+            drawPath(linePath, ring, style = Stroke(width = 13f, cap = StrokeCap.Round))
+            drawPath(outerPath, ring)
             drawRoundRect(
                 fill,
                 Offset(if (toLeft) 12f else 2.38867f, 24f),
@@ -1167,31 +1184,105 @@ private fun SideArrow(
     }
 }
 
-/** Круглый указатель L/R между стрелками: точные контуры и глифы букв из SVG 40×40. */
+/**
+ * Круглый указатель L/R между стрелками — новый макет 69×69 из SVG:
+ * серый круг 19 с обводкой, белое поле 17, буквы L и R, разделитель и кольцо-стрелка.
+ * Кольцо медленно вращается, чтобы подсказать: сторону можно менять.
+ */
 @Composable
 private fun LrBadge(courtSide: String, modifier: Modifier = Modifier) {
     val colors = ScoreKeeperTheme.colors
-    val basePath = remember { PathParser().parsePathString("M39 20C39 30.4934 30.4934 39 20 39C9.50659 39 1 30.4934 1 20C1 9.50659 9.50659 1 20 1C30.4934 1 39 9.50659 39 20Z").toPath() }
-    val leftLetterPath = remember { PathParser().parsePathString("M7.19883 25.6V14.4C7.19883 14.0133 7.33216 13.6867 7.59883 13.42C7.87883 13.14 8.21216 13 8.59883 13C8.9855 13 9.31883 13.14 9.59883 13.42C9.86549 13.6867 9.99883 14.0133 9.99883 14.4V24.2H16.5988C16.9855 24.2 17.3188 24.3333 17.5988 24.6C17.8655 24.88 17.9988 25.2133 17.9988 25.6C17.9988 25.9867 17.8655 26.3133 17.5988 26.58C17.3188 26.86 16.9855 27 16.5988 27H8.59883C8.21216 27 7.87883 26.86 7.59883 26.58C7.33216 26.3133 7.19883 25.9867 7.19883 25.6Z").toPath() }
-    val rightLetterPath = remember { PathParser().parsePathString("M24.993 15.8V20.2H29.593C30.193 20.2 30.713 19.9867 31.153 19.56C31.5796 19.12 31.793 18.6 31.793 18C31.793 17.3867 31.5796 16.8667 31.153 16.44C30.713 16.0133 30.193 15.8 29.593 15.8H24.993ZM22.193 25.6V14.4C22.193 14.0133 22.3263 13.68 22.593 13.4C22.873 13.1333 23.2063 13 23.593 13H29.593C30.9663 13 32.1463 13.4867 33.133 14.46C34.1063 15.4467 34.593 16.6267 34.593 18C34.593 18.9067 34.3663 19.7467 33.913 20.52C33.4596 21.2667 32.8596 21.86 32.113 22.3L34.233 24.66C34.4863 24.9533 34.6063 25.2933 34.593 25.68C34.5663 26.0667 34.413 26.3867 34.133 26.64C33.8663 26.88 33.553 27 33.193 27C32.7796 27 32.433 26.8467 32.153 26.54L28.973 23H24.993V25.6C24.993 25.9867 24.8596 26.3133 24.593 26.58C24.313 26.86 23.9796 27 23.593 27C23.2063 27 22.873 26.86 22.593 26.58C22.3263 26.3133 22.193 25.9867 22.193 25.6Z").toPath() }
-    Canvas(modifier.size(40.dp)) {
-        val u = size.minDimension / 40f
+    // в тёмной теме обводка #9EC8E2 заменена на #22314A (просьба из правок)
+    val ring = if (colors.dark) Color(0xFF22314A) else Color(0xFF9EC8E2)
+    val letter = if (colors.dark) colors.accent else Color(0xFF2070F5)
+    val letterOff = if (colors.dark) colors.accentSoft else Color(0xFF848484)
+
+    // буквы L и R из SVG (координаты 69×69)
+    val leftLetter = remember {
+        PathParser().parsePathString(
+            "M27.6967 29.0467L27.6967 39.1267C27.6967 39.4747 27.5767 39.7687 27.3367 40.0087" +
+                "C27.0847 40.2607 26.7847 40.3867 26.4367 40.3867C26.0887 40.3867 25.7947 40.2607 " +
+                "25.5547 40.0087C25.3027 39.7687 25.1767 39.4747 25.1767 39.1267L25.1767 31.2247" +
+                "L24.5467 31.5847C24.2467 31.7527 23.9287 31.7947 23.5927 31.7107C23.2567 31.6147 " +
+                "22.9987 31.4167 22.8187 31.1167C22.6507 30.8167 22.6147 30.4987 22.7107 30.1627" +
+                "C22.7947 29.8267 22.9867 29.5687 23.2867 29.3887L25.8067 27.9487C26.2387 27.7087 " +
+                "26.6587 27.7087 27.0667 27.9487C27.4867 28.2007 27.6967 28.5667 27.6967 29.0467Z",
+        ).toPath()
+    }
+    val rightLetter = remember {
+        PathParser().parsePathString(
+            "M47.5647 38.2267C47.8167 38.4787 47.9427 38.7787 47.9427 39.1267C47.9427 39.4747 " +
+                "47.8167 39.7687 47.5647 40.0087C47.3247 40.2607 47.0307 40.3867 46.6827 40.3867" +
+                "L38.0427 40.3867C37.6947 40.3867 37.3947 40.2607 37.1427 40.0087C36.9027 39.7687 " +
+                "36.7827 39.4747 36.7827 39.1267C36.7827 37.7107 37.4547 36.5767 38.7987 35.7247" +
+                "C39.3147 35.4007 39.9387 35.1067 40.6707 34.8427C40.9587 34.7467 41.2827 34.6447 " +
+                "41.6427 34.5367L42.1107 34.4107L42.5427 34.2847L42.9207 34.1767L43.2807 34.0867" +
+                "C43.5327 34.0027 43.7487 33.9307 43.9287 33.8707C44.5647 33.6547 44.9967 33.3607 " +
+                "45.2247 32.9887C45.3087 32.8567 45.3627 32.7187 45.3867 32.5747C45.3987 32.5267 " +
+                "45.4107 32.4727 45.4227 32.4127L45.4227 32.3407L45.4227 32.2867C45.4227 31.7347 " +
+                "45.1227 31.2667 44.5227 30.8827C43.9347 30.4987 43.2147 30.3067 42.3627 30.3067" +
+                "C41.6907 30.3067 41.0247 30.4507 40.3647 30.7387C39.7647 31.0027 39.3027 31.3147 " +
+                "38.9787 31.6747C38.7507 31.9387 38.4627 32.0827 38.1147 32.1067C37.7667 32.1307 " +
+                "37.4607 32.0287 37.1967 31.8007C36.9447 31.5607 36.8067 31.2667 36.7827 30.9187" +
+                "C36.7587 30.5827 36.8607 30.2827 37.0887 30.0187C37.6767 29.3467 38.4567 28.8067 " +
+                "39.4287 28.3987C40.3887 27.9907 41.3667 27.7867 42.3627 27.7867C43.9467 27.7867 " +
+                "45.2727 28.2187 46.3407 29.0827C47.4087 29.9347 47.9427 31.0027 47.9427 32.2867" +
+                "C47.9427 33.1987 47.6667 33.9967 47.1147 34.6807C46.5507 35.3767 45.7647 35.8987 " +
+                "44.7567 36.2467C44.4687 36.3547 43.9587 36.5107 43.2267 36.7147C41.6907 37.1347 " +
+                "40.6527 37.5187 40.1127 37.8667L46.6827 37.8667C47.0307 37.8667 47.3247 37.9867 " +
+                "47.5647 38.2267Z",
+        ).toPath()
+    }
+    // кольцо-стрелка: дуга почти полного круга и наконечник
+    val arrowPath = remember {
+        PathParser().parsePathString(
+            "M44.0015 18.7736C51.6019 23.4418 54.8539 33.0896 51.2629 41.5495C47.3066 50.87 " +
+                "36.5442 55.2183 27.2236 51.262C17.903 47.3056 13.5547 36.5432 17.5111 27.2226" +
+                "C20.4481 20.3035 27.1381 16.1227 34.204 16.0488",
+        ).toPath()
+    }
+    val arrowHead = remember {
+        PathParser().parsePathString(
+            "M31.2182 23.0829L34.3701 15.6575C34.4266 15.5245 34.4563 15.3817 34.4575 15.2372" +
+                "C34.4588 15.0928 34.4316 14.9495 34.3775 14.8156C34.3234 14.6816 34.2434 14.5597 " +
+                "34.1422 14.4566C34.0409 14.3536 33.9204 14.2715 33.7874 14.2151L26.362 11.0632",
+        ).toPath()
+    }
+
+    // медленное вращение кольца (анимация «стрелка крутится»)
+    val spin = rememberInfiniteTransition(label = "lrSpin")
+    val angle by spin.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3600, easing = LinearEasing),
+        ),
+        label = "lrSpinAngle",
+    )
+
+    Canvas(modifier.size(69.dp)) {
+        val u = size.width / 69f
         withTransform({ scale(u, u, Offset.Zero) }) {
-            drawPath(basePath, CoinGray)
-            drawPath(basePath, CoinRing, style = Stroke(2f))
-            drawArc(
-                Color.White,
-                startAngle = if (courtSide == "L") 90f else -90f,
-                sweepAngle = 180f, useCenter = true,
-                topLeft = Offset(3f, 3f), size = Size(34f, 34f),
+            // серый диск, белое поле, буквы и разделитель — как в SVG
+            drawCircle(Color(0xFF848484), radius = 19f, center = Offset(34.3867f, 34.3869f))
+            drawCircle(Color.White, radius = 17f, center = Offset(34.3867f, 34.3867f))
+            drawPath(leftLetter, if (courtSide == "L") letter else letterOff)
+            drawPath(rightLetter, if (courtSide == "R") letter else letterOff)
+            drawLine(
+                Color(0xFF848484),
+                Offset(34.3867f, 23.3867f),
+                Offset(34.3867f, 45.8867f),
+                1.4f,
             )
-            val on = colors.accent
-            val off = if (colors.dark) colors.accentSoft else Color(0xFFBCBCBC)
-            drawPath(leftLetterPath, if (courtSide == "L") on else off)
-            drawPath(rightLetterPath, if (courtSide == "R") on else off)
+            // вращающееся кольцо-стрелка вокруг диска
+            withTransform({ rotate(angle, Offset(34.3867f, 34.3867f)) }) {
+                drawPath(arrowPath, ring, style = Stroke(width = 3f, cap = StrokeCap.Round))
+                drawPath(arrowHead, ring, style = Stroke(width = 3f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            }
         }
     }
 }
+
 
 /** Пилюля-поле для цифр в корректировке: 90×53, r20 (по SVG). */
 @Composable
@@ -1699,7 +1790,7 @@ private fun VolleyballSettingsDialog(
             HotkeyRouter.dialogHandler = { id ->
                 when (id) {
                     HotkeyId.DONE, HotkeyId.START_MATCH -> { onConfirm(draft); true }
-                    HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { onBack(); true }
+                    HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> { onBack(); true }
                     else -> false
                 }
             }
@@ -1807,7 +1898,7 @@ private fun TossDialogOverlay(
         HotkeyRouter.dialogHandler = { id ->
             when (id) {
                 HotkeyId.DONE, HotkeyId.START_MATCH -> { onConfirm(serverSel); true }
-                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { onBack(); true }
+                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> { onBack(); true }
                 else -> false
             }
         }
@@ -1863,7 +1954,7 @@ private fun TextDialogOverlay(
         HotkeyRouter.dialogHandler = { id ->
             when (id) {
                 HotkeyId.DONE, HotkeyId.START_MATCH -> { onDisplay(textInput); true }
-                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { onBack(); true }
+                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> { onBack(); true }
                 else -> false
             }
         }
@@ -1946,7 +2037,7 @@ private fun CorrectionDialogOverlay(
         HotkeyRouter.dialogHandler = { id ->
             when (id) {
                 HotkeyId.DONE, HotkeyId.START_MATCH -> { submit(); true }
-                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { onBack(); true }
+                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> { onBack(); true }
                 else -> false
             }
         }
@@ -2013,7 +2104,7 @@ private fun CorrectionDialogOverlay(
             onClick = { selectedCourtSide = "L" },
             modifier = Modifier.offset(200.dp, 446.dp),
         )
-        LrBadge(selectedCourtSide, Modifier.offset(373.dp, 454.dp))
+        LrBadge(selectedCourtSide, Modifier.offset(358.5.dp, 439.5.dp))
         SideArrow(
             toLeft = false, selected = selectedCourtSide == "R",
             onClick = { selectedCourtSide = "R" },
@@ -2056,7 +2147,7 @@ private fun CloseMatchConfirmationDialog(
     DisposableEffect(isSubmitting) {
         HotkeyRouter.dialogHandler = { id ->
             when (id) {
-                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { onBack(); true }
+                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> { onBack(); true }
                 HotkeyId.DONE, HotkeyId.START_MATCH -> { if (!isSubmitting) onConfirm(); true }
                 else -> false
             }
@@ -2076,14 +2167,14 @@ private fun CloseMatchConfirmationDialog(
         BasicText(
             text = warning,
             style = type.teamLabel.copy(
-                fontSize = 28.sp,
-                lineHeight = 36.sp,
+                fontSize = 32.sp,
+                lineHeight = 44.sp,
                 color = if (colors.dark) colors.accentText else Color.Black,
                 textAlign = TextAlign.Center,
             ),
-            modifier = Modifier.offset(40.dp, 157.dp).size(714.dp, 80.dp),
+            modifier = Modifier.offset(40.dp, 150.dp).size(714.dp, 96.dp),
             maxLines = 2,
-            softWrap = false,
+            softWrap = true,
         )
         if (errorMessage != null) {
             BasicText(
@@ -2106,9 +2197,11 @@ private fun CloseMatchConfirmationDialog(
  * Подтверждение выхода из приложения (кнопка «закрыть» и клавиша F1).
  * Если матч идёт — предупреждаем, что счёт не сохранится; иначе окно просто закрывается.
  */
+/** Матч идёт или уже завершён: подпись предупреждения в окне закрытия разная. */
 @Composable
 private fun ExitConfirmationDialog(
     language: AppLanguage,
+    matchInProgress: Boolean,
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
 ) {
@@ -2119,7 +2212,7 @@ private fun ExitConfirmationDialog(
     DisposableEffect(Unit) {
         HotkeyRouter.dialogHandler = { id ->
             when (id) {
-                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { onCancel(); true }
+                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> { onCancel(); true }
                 HotkeyId.DONE, HotkeyId.START_MATCH -> { onConfirm(); true }
                 else -> false
             }
@@ -2137,17 +2230,21 @@ private fun ExitConfirmationDialog(
             794.dp,
         )
         BasicText(
-            if (russian) "МАТЧ ЕЩЁ ИДЁТ —\nСЧЁТ НЕ СОХРАНИТСЯ."
-            else "THE MATCH IS STILL RUNNING —\nTHE SCORE WON'T BE SAVED.",
+            when {
+                russian && matchInProgress -> "МАТЧ ЕЩЁ ИДЁТ —\nСЧЁТ НЕ СОХРАНИТСЯ."
+                russian -> "МАТЧ ЗАВЕРШЁН, НО\nСЧЁТ ЕЩЁ НЕ СОХРАНЁН."
+                matchInProgress -> "THE MATCH IS STILL RUNNING —\nTHE SCORE WON'T BE SAVED."
+                else -> "THE MATCH IS OVER, BUT\nTHE SCORE IS NOT SAVED YET."
+            },
             style = type.teamLabel.copy(
-                fontSize = 28.sp,
-                lineHeight = 36.sp,
+                fontSize = 32.sp,
+                lineHeight = 44.sp,
                 color = if (colors.dark) colors.accentText else Color.Black,
                 textAlign = TextAlign.Center,
             ),
-            modifier = Modifier.offset(40.dp, 157.dp).size(714.dp, 80.dp),
+            modifier = Modifier.offset(40.dp, 150.dp).size(714.dp, 96.dp),
             maxLines = 2,
-            softWrap = false,
+            softWrap = true,
         )
         CloseMatchConfirmButton(
             text = if (russian) "ПОДТВЕРДИТЬ" else "CONFIRM",
@@ -2326,11 +2423,11 @@ fun VoleyballScreen(
         when {
             showExitConfirmationDialog -> when (id) {
                 HotkeyId.DONE -> { /* подтверждение закрытия — только кнопкой */ false }
-                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { showExitConfirmationDialog = false; true }
+                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> { showExitConfirmationDialog = false; true }
                 else -> false
             }
             anyDialogOpen -> when (id) {
-                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> {
+                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> {
                     showTossDialog = false
                     showTextDialog = false
                     showCorrectionDialog = false
@@ -2345,7 +2442,7 @@ fun VoleyballScreen(
                 HotkeyId.CORRECTION -> { showCorrectionDialog = true; true }
                 HotkeyId.RESET -> { resetScoreAction(); true }
                 HotkeyId.START_MATCH, HotkeyId.DONE -> { endMatchAction(); true }
-                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> {
+                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> {
                     showExitConfirmationDialog = true
                     closeMatchError = null
                     true
@@ -2355,12 +2452,16 @@ fun VoleyballScreen(
             match.status == "NOT_STARTED" -> when (id) {
                 HotkeyId.START_MATCH, HotkeyId.DONE -> { startMatchAction(); true }
                 HotkeyId.UNDO, HotkeyId.RESET, HotkeyId.CORRECTION -> false
-                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { onBack(); true }
+                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> { onBack(); true }
                 else -> false
             }
-            else -> when (id) { // FINISHED
+            else -> when (id) { // FINISHED — счёт ещё не сохранён, спрашиваем подтверждение
                 HotkeyId.START_MATCH, HotkeyId.DONE -> { continueMatchAction(); true }
-                HotkeyId.BACK_H, HotkeyId.BACK_ESC -> { onBack(); true }
+                HotkeyId.BACK_F11, HotkeyId.BACK_ESC -> {
+                    showExitConfirmationDialog = true
+                    closeMatchError = null
+                    true
+                }
                 HotkeyId.CORRECTION -> { showCorrectionDialog = true; true }
                 else -> false
             }

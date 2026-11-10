@@ -50,11 +50,15 @@ object HotkeyRouter {
 }
 
 /**
- * Перевод нажатия клавиши из макета в [HotkeyId].
+ * Перевод нажатия клавиши в [HotkeyId].
  *
  * Используем кросс-платформенное API Compose (`KeyEvent.key`, `isCtrlPressed`, …), а не
- * AWT-события: на desktop `nativeKeyEvent` — это внутренний класс Compose, а не
- * `java.awt.event.KeyEvent`, поэтому обращаться к `keyCode`/`isControlDown` нельзя.
+ * AWT-события: на desktop `nativeKeyEvent` — внутренний класс Compose, а не
+ * `java.awt.event.KeyEvent`.
+ *
+ * Важно: раскладка клавиатуры не должна влиять на хоткеи. Клавиши «~», «−», «1», «2» и
+ * Enter на русской раскладке дают другие символы, поэтому ориентируемся на физическую
+ * клавишу и, дополнительно, на её символ/код — так работают обе раскладки.
  */
 object HotkeyKeys {
     /** Переводит нажатие в [HotkeyId] (или null, если клавиша не наша). */
@@ -64,35 +68,41 @@ object HotkeyKeys {
         val key = event.key
         val shift = event.isShiftPressed
 
-        // F1/F2 разбираем до проверки модификаторов: на ноутбуках Fn+F1/F2 — обычное дело,
-        // а Ctrl/Alt+F1..F4 системных сочетаний не занимают.
+        // F1/F2/F11 разбираем до проверки модификаторов: на ноутбуках Fn+F-клавиши — обычное
+        // дело, а Ctrl/Alt + F1…F4 системных сочетаний не занимают.
         when (key) {
             Key.F1 -> return HotkeyId.CLOSE_APP
             Key.F2 -> return HotkeyId.MINIMIZE
+            Key.F11 -> return HotkeyId.BACK_F11
             else -> Unit
         }
 
         // Остальные сочетания с модификаторами оставляем системе (Ctrl+C, Alt+Tab и т.п.).
         if (event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) return null
 
-        return when (key) {
-            Key.One, Key.NumPad1 -> if (shift) null else HotkeyId.ADD_POINT_1
-            Key.Two, Key.NumPad2 -> if (shift) null else HotkeyId.ADD_POINT_2
-            Key.Minus, Key.NumPadSubtract -> if (shift) null else HotkeyId.UNDO
-            Key.Tab -> HotkeyId.CORRECTION
-            Key.Backspace, Key.Delete -> HotkeyId.RESET
-            Key.Enter, Key.NumPadEnter -> HotkeyId.DONE
-            Key.Escape -> HotkeyId.BACK_ESC
-            Key.H -> if (shift) null else HotkeyId.BACK_H
-            Key.Grave -> HotkeyId.SETTINGS
-            else -> null
+        // Физические клавиши: работают в любой раскладке (RU/EN) одинаково.
+        when (key) {
+            Key.One, Key.NumPad1 -> return if (shift) null else HotkeyId.ADD_POINT_1
+            Key.Two, Key.NumPad2 -> return if (shift) null else HotkeyId.ADD_POINT_2
+            Key.Minus, Key.NumPadSubtract -> return if (shift) null else HotkeyId.UNDO
+            Key.Tab -> return HotkeyId.CORRECTION
+            Key.Backspace, Key.Delete -> return HotkeyId.RESET
+            Key.Enter, Key.NumPadEnter -> return HotkeyId.DONE
+            Key.Escape -> return HotkeyId.BACK_ESC
+            else -> Unit
         }
+
+        // «~» живёт на клавише слева от «1» (в EN это `/~, на русской — та же клавиша «ё»):
+        // Compose присылает физическую клавишу, поэтому раскладка здесь не важна.
+        if (key == Key.Grave || key == Key.Apostrophe) return HotkeyId.SETTINGS
+
+        return null
     }
 }
 
 /**
  * Помечает поле ввода: пока в нём курсор, горячие клавиши не перехватывают набор текста
- * (иначе буква «H» закрывала бы диалог вместо того, чтобы напечататься).
+ * (иначе «−» или Enter мешали бы печатать).
  */
 fun Modifier.trackTextFocus(key: Any): Modifier =
     onFocusChanged { HotkeyRouter.markTextFocus(key, it.isFocused) }

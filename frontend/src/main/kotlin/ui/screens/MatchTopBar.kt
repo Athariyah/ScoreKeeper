@@ -28,9 +28,12 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ui.components.HotkeyId
 import ui.components.rememberHotkeyFlash
 import ui.components.safeT
@@ -128,7 +131,7 @@ internal fun MatchTopBar(
     val chipPill = remember { PathParser().parsePathString(CHIP_PILL_PATH).toPath() }
     // вспышки пилюли «ХОТКЕИ» и шестерёнки при нажатии H/Esc/~/F1/F2
     val chipFlash = rememberHotkeyFlash(
-        if (pulseId == HotkeyId.BACK_H || pulseId == HotkeyId.BACK_ESC) pulseTick else 0L,
+        if (pulseId == HotkeyId.BACK_F11 || pulseId == HotkeyId.BACK_ESC) pulseTick else 0L,
     )
     val cogFlash = rememberHotkeyFlash(
         if (pulseId == HotkeyId.SETTINGS) pulseTick else 0L,
@@ -148,7 +151,7 @@ internal fun MatchTopBar(
                     drawPath(chipPill, chipInk.copy(alpha = 0.18f * safeT(chipFlash)))
                 }
                 drawPath(chipPill, chipBg)
-                drawMiniKeycap(chipInk, Offset(96f, 12f))
+                drawMiniKeycap(chipInk, Offset(96f, 12f), measurer, type.pillLabel)
                 // таймер
                 drawPath(timerSpan, timerInk)
                 // шестерёнка
@@ -197,8 +200,13 @@ internal fun MatchTopBar(
 private fun baselineTop(layout: TextLayoutResult, baseline: Float): Float =
     baseline - layout.firstBaseline
 
-/** Мини-клавиша «H» в кнопке хоткеев (координаты от левого верхнего угла полосы). */
-private fun DrawScope.drawMiniKeycap(ink: Color, at: Offset) {
+/** Мини-клавиша «F11» в кнопке хоткеев (координаты от левого верхнего угла полосы). */
+private fun DrawScope.drawMiniKeycap(
+    ink: Color,
+    at: Offset,
+    measurer: TextMeasurer,
+    labelStyle: TextStyle,
+) {
     withTransform({ translate(at.x, at.y) }) {
         // подошва 95.95…122.17, 13.47…41
         drawRoundRect(
@@ -226,12 +234,13 @@ private fun DrawScope.drawMiniKeycap(ink: Color, at: Offset) {
         val legY = 17.6f
         drawLine(ink, Offset(6f, legY), Offset(3.5f, 24.6f), 1.8f, StrokeCap.Round)
         drawLine(ink, Offset(20.9f, legY), Offset(23.4f, 24.6f), 1.8f, StrokeCap.Round)
-        // буква H
-        val cy = 11.4f
-        val sw = 2.1f
-        drawLine(ink, Offset(9.3f, cy - 3.4f), Offset(9.3f, cy + 3.4f), sw, StrokeCap.Round)
-        drawLine(ink, Offset(17.6f, cy - 3.4f), Offset(17.6f, cy + 3.4f), sw, StrokeCap.Round)
-        drawLine(ink, Offset(9.3f, cy), Offset(17.6f, cy), sw, StrokeCap.Round)
+        // подпись F11 в «колпашке»
+        val layout = measurer.measure(AnnotatedString("F11"), labelStyle.copy(fontSize = 7.6.sp, color = ink))
+        drawText(
+            textLayoutResult = layout,
+            color = ink,
+            topLeft = Offset(13.45f - layout.size.width / 2f, 11.4f - layout.size.height / 2f),
+        )
     }
 }
 

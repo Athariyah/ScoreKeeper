@@ -137,74 +137,76 @@
 // ── геометрия из макетов ───────────────────────────────────────────────
 const CARD = { w: 794, h: 564 };
 const LEFT = [
-  { key: [37, 152, 47.04], text: [97, 176.2], label: "ДОБАВИТЬ ОЧКО\nКОМАНДЕ 1", glyph: "1" },
-  { key: [37, 211.7, 47.04], text: [97, 236.4], label: "ДОБАВИТЬ ОЧКО\nКОМАНДЕ 2", glyph: "2" },
-  { key: [37, 271, 47.04], text: [97, 300.5], label: "ОТКАТ", glyph: "–" },
+  { key: [37, 152, 48], text: [97, 176.2], label: "ДОБАВИТЬ ОЧКО\nКОМАНДЕ 1", glyph: "1" },
+  { key: [37, 211.7, 48], text: [97, 236.4], label: "ДОБАВИТЬ ОЧКО\nКОМАНДЕ 2", glyph: "2" },
+  { key: [37, 271, 48], text: [97, 300.5], label: "ОТКАТ", glyph: "–" },
   { key: [37, 330, 69], text: [117.7, 361.1], label: "КОРРЕКТИРОВКА", glyph: "corr" },
   { key: [37, 392, 81], text: [133, 420.8], label: "СБРОС", glyph: "reset" },
   { key: [37, 455, 155], text: [207, 472.2], label: "НАЧАТЬ/\nПРОДОЛЖИТЬ/\nЗАВЕРШИТЬ МАТЧ", glyph: "enterWide" },
 ];
 const RIGHT = [
-  { key: [431.9, 157, 47.04], text: [493.1, 186.1], label: "НАЗАД", glyph: "H" },
-  { key: [431.9, 217, 47.04], text: [493.1, 246.1], label: "НАЗАД", glyph: "Esc" },
-  { key: [431.9, 277, 47.04], text: [493.1, 304.1], label: "НАСТРОЙКИ", glyph: "~" },
-  { key: [431.9, 337, 47.04], text: [492.5, 357], label: "ЗАКРЫТЬ\nПРИЛОЖЕНИЕ", glyph: "F1" },
-  { key: [431.9, 397, 47.04], text: [492.5, 417], label: "СВЕРНУТЬ\nПРИЛОЖЕНИЕ", glyph: "F2" },
-  { key: [431.9, 459, 47.04], text: [536.9, 483.5], label: "ГОТОВО/\nПОДТВЕРДИТЬ", glyph: "enterSmall" },
+  { key: [431.9, 157, 48], text: [493.1, 186.1], label: "НАЗАД", glyph: "F11" },
+  { key: [431.9, 217, 48], text: [493.1, 246.1], label: "НАЗАД", glyph: "Esc" },
+  { key: [431.9, 277, 48], text: [493.1, 304.1], label: "НАСТРОЙКИ", glyph: "~" },
+  { key: [431.9, 337, 48], text: [492.5, 357], label: "ЗАКРЫТЬ\nПРИЛОЖЕНИЕ", glyph: "F1" },
+  { key: [431.9, 397, 48], text: [492.5, 417], label: "СВЕРНУТЬ\nПРИЛОЖЕНИЕ", glyph: "F2" },
+  { key: [431.9, 459, 48], text: [536.9, 483.5], label: "ГОТОВО/\nПОДТВЕРДИТЬ", glyph: "enterSmall" },
 ];
 
-// клавиша: те же слои, что в drawKeycap()
+// клавиша: те же слои и толщины, что в drawKeycap()
 function keySVG(w, dark) {
   const ink = dark ? "#e9f1f8" : "#222222";
   const face = dark ? "#1b2a40" : "#ffffff";
-  const base = dark ? "#0f1b2d" : "#d7dfe2";
-  const H = 49.31;
-  const fl = 9.1, ft = 0.7, fw = w - 18.2, fh = 30.6;
-  const legY = ft + fh, legB = H - 3.4;
-  return `<svg width="${w}" height="51.7" viewBox="0 0 ${w} 51.7">
-    <rect x="0" y="2.4" width="${w}" height="${H - 1.8}" rx="10.8" fill="${base}"/>
-    <rect x="1.7" y="0" width="${w - 3.4}" height="${H - 3.7}" rx="10.2" fill="${base}"/>
-    <rect x="${fl}" y="${ft}" width="${fw}" height="${fh}" rx="4.9" fill="${face}"/>
-    <rect x="0.9" y="0.9" width="${w - 1.8}" height="${H - 1.8}" rx="10.2"
-          fill="none" stroke="${ink}" stroke-width="2"/>
-    <rect x="${fl}" y="${ft}" width="${fw}" height="${fh}" rx="4.9"
-          fill="none" stroke="${ink}" stroke-width="1.7"/>
-    <path d="M${fl + 0.4} ${legY} L9.2 ${legB} M${fl + fw - 0.4} ${legY} L${w - 9.2} ${legB}"
-          stroke="${ink}" stroke-width="2.2" stroke-linecap="round"/>
+  const base = dark ? "#0e1a2b" : "#d7dfe2";
+  const CAP_L = 9.07, CAP_T = 2, CAP_B = 32.61;
+  const capH = CAP_B - CAP_T, capW = w - 2 * CAP_L;
+  const legTop = CAP_B - 0.6;
+  return `<svg width="${w}" height="52" viewBox="0 0 ${w} 52" style="position:absolute;left:0;top:0">
+    <rect x="0.31" y="4.55" width="${w - 0.62}" height="47.14" rx="11" fill="${base}"/>
+    <rect x="2" y="2" width="${w - 4}" height="45.31" rx="9.55" fill="${base}"/>
+    <path d="M${CAP_L + 1.13} ${legTop} L3.85 42.87 M${w - CAP_L - 1.13} ${legTop} L${w - 3.85} 42.87"
+          stroke="${ink}" stroke-width="2" stroke-linecap="butt"/>
+    <rect x="${CAP_L}" y="${CAP_T}" width="${capW}" height="${capH}" rx="5.14" fill="${face}"/>
+    <rect x="${CAP_L}" y="${CAP_T}" width="${capW}" height="${capH}" rx="5.14"
+          fill="none" stroke="${ink}" stroke-width="2" stroke-linejoin="round"/>
+    <rect x="1" y="1" width="${w - 2}" height="45.31" rx="9.55"
+          fill="none" stroke="${ink}" stroke-width="2" stroke-linejoin="round"/>
   </svg>`;
 }
 
 function glyphSVG(g, w, dark) {
   const ink = dark ? "#e9f1f8" : "#222222";
-  const gold = dark ? "#dfaf24" : "#2070f5";
-  const cx = w / 2, cy = 0.7 + 30.6 / 2;
+  const shift = ["corr", "reset", "enterWide"].includes(g) ? 0 : (w - 48) / 2;
+  const tx = (x) => x + shift;
+  const g0 = `<svg width="${w}" height="52" viewBox="0 0 ${w} 52" style="position:absolute;left:0;top:0">`;
   if (g === "corr") {
-    return `<svg width="${w}" height="51.7" style="position:absolute;left:0;top:0">
-      <g stroke="${ink}" stroke-width="2.2" stroke-linecap="round" fill="none">
-        <path d="M${cx - 11} ${cy} h13 M${cx + 2} ${cy} l-4 -4 M${cx + 2} ${cy} l-4 4"/>
-        <path d="M${cx + 8.5} ${cy - 5} v10"/>
-      </g></svg>`;
+    return g0 + `<path d="M23.84 17.85H40.34M35.14 12.25L40.74 17.85L35.14 23.45M44.94 10.45V25.25"
+      fill="none" stroke="${ink}" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   }
   if (g === "reset") {
-    return `<svg width="${w}" height="51.7" style="position:absolute;left:0;top:0">
-      <g stroke="${ink}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
-        <path d="M${cx + 9} ${cy - 6.5} h-9 v13 h9"/>
-        <path d="M${cx - 3} ${cy - 3} l6 6 M${cx + 3} ${cy - 3} l-6 6"/>
-      </g></svg>`;
+    return g0 + `<path d="M29.54 17.85L36.04 9.85H51.54V25.85H36.04L29.54 17.85Z
+      M41.04 14.75L44.14 17.85M44.14 17.85L47.24 20.95M44.14 17.85L47.24 14.75M44.14 17.85L41.04 20.95"
+      fill="none" stroke="${ink}" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   }
   if (g === "enterWide") {
-    return `<svg width="${w}" height="51.7" style="position:absolute;left:0;top:0">
-      <path d="M${cx + 8} ${cy - 4} v4.6 H${cx - 7} M${cx - 3} ${cy - 3.2} l-4 3.8 4 3.8"
-            stroke="${ink}" stroke-width="2.4" fill="none"
-            stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    return g0 + `<path d="M88.3 9.85V20.35H70.3M75.7 25.55L70.3 20.35L75.7 15.15"
+      fill="none" stroke="${ink}" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   }
   if (g === "enterSmall") {
-    return `<svg width="${w}" height="51.7" style="position:absolute;left:0;top:0">
-      <path d="M${cx + 8} ${cy - 4} v4.6 H${cx - 7} M${cx - 3} ${cy - 3.2} l-4 3.8 4 3.8"
-            stroke="${ink}" stroke-width="2.4" fill="none"
-            stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    return g0 + `<path d="M${tx(28.6)} 12.6V22.4H${tx(19.4)}M${tx(23)} 17.4L${tx(19.4)} 22.4L${tx(23)} 27.4"
+      fill="none" stroke="${ink}" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   }
-  const size = g === "Esc" ? 9.5 : (g === "F1" || g === "F2") ? 11.5 : 22;
+  if (g === "1" || g === "2" || g === "–") {
+    const d = g === "1"
+      ? "M26.2354 10.62V25.18C26.2354 25.6827 26.0621 26.1073 25.7154 26.454C25.3514 26.818 24.9181 27 24.4154 27C23.9128 27 23.4881 26.818 23.1414 26.454C22.7774 26.1073 22.5954 25.6827 22.5954 25.18V13.766L21.6854 14.286C21.2521 14.5287 20.7928 14.5893 20.3074 14.468C19.8221 14.3293 19.4494 14.0433 19.1894 13.61C18.9468 13.1767 18.8948 12.7173 19.0334 12.232C19.1548 11.7467 19.4321 11.374 19.8654 11.114L23.5054 9.034C24.1294 8.68733 24.7361 8.68733 25.3254 9.034C25.9321 9.398 26.2354 9.92667 26.2354 10.62Z"
+      : g === "2"
+      ? "M28.1 12.05C28.1 13 27.75 13.78 27.05 14.35C26.35 14.92 25.32 15.4 23.96 15.79C22.42 16.23 21.5 16.55 21.2 16.75L27.1 16.75C27.52 16.75 27.85 16.9 28.09 17.2C28.32 17.5 28.44 17.86 28.44 18.28C28.44 18.7 28.32 19.06 28.09 19.36C27.85 19.66 27.52 19.81 27.1 19.81L19.7 19.81C19.28 19.81 18.95 19.66 18.71 19.36C18.47 19.06 18.35 18.7 18.35 18.28C18.35 16.72 19.1 15.5 20.6 14.62C21.25 14.27 22.1 13.98 23.15 13.75C24 13.55 24.55 13.28 24.8 12.95C24.95 12.76 25.02 12.52 25.02 12.23C25.02 11.72 24.74 11.28 24.18 10.91C23.62 10.54 22.94 10.36 22.14 10.36C21.5 10.36 20.86 10.49 20.23 10.75C19.6 11.01 19.14 11.31 18.85 11.65C18.6 11.94 18.3 12.09 17.95 12.1C17.6 12.11 17.29 12 17.02 11.77C16.75 11.53 16.6 11.24 16.57 10.9C16.54 10.56 16.65 10.25 16.9 9.98C17.53 9.26 18.36 8.7 19.39 8.29C20.42 7.88 21.45 7.67 22.48 7.67C23.15 7.67 23.84 7.76 24.55 7.94C25.26 8.12 25.9 8.38 26.47 8.72C27.06 9.07 27.46 9.5 27.68 10.01C27.96 10.65 28.1 11.33 28.1 12.05Z"
+      : "M17.35 16.35H30.65C31.3 16.35 31.84 16.58 32.24 17.03C32.65 17.48 32.85 18.01 32.85 18.6C32.85 19.19 32.65 19.72 32.24 20.17C31.84 20.62 31.3 20.85 30.65 20.85H17.35C16.7 20.85 16.16 20.62 15.76 20.17C15.35 19.72 15.15 19.19 15.15 18.6C15.15 18.01 15.35 17.48 15.76 17.03C16.16 16.58 16.7 16.35 17.35 16.35Z";
+    return g0 + `<g transform="translate(${shift} 0)"><path d="${d}" fill="${ink}"/></g></svg>`;
+  }
+  // текстовые: ESC, F11, F1, F2, ~
+  const size = g === "~" ? 22 : g === "ESC" ? 12 : 12.6;
+  const cy = (2 + 32.61) / 2;
   return `<div class="abs" style="left:0;top:${cy}px;width:${w}px;text-align:center;
             transform:translateY(-50%);font-size:${size}px;line-height:1;color:${ink}">${g}</div>`;
 }
