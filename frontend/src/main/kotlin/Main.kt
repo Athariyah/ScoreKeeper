@@ -11,6 +11,7 @@ import ui.hotkeys.Hotkeys
 import ui.hotkeys.MatchHotkeyActions
 import ui.hotkeys.RegisterHotkeyLayer
 import ui.hotkeys.RegisterMatchHotkeys
+import ui.hotkeys.rememberHotkeyPress
 import ui.hotkeys.toHotKey
 import ui.hotkeys.trackTyping
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -84,6 +85,7 @@ import com.example.ScoreResponse
 import com.example.TennisSetScore
 import com.example.VolleyballSetScore
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.jetbrains.skia.Image
 import ui.components.OvalsCanvas
 import ui.components.SettingsButton
@@ -237,11 +239,16 @@ private fun runApp() = application {
     val onHotkey: (KeyEvent) -> Boolean = handler@{ e ->
         if (e.type == KeyEventType.KeyUp) {
             pressedKeys.remove(e.key)
+            e.toHotKey()?.let(Hotkeys::onKeyUp)
             return@handler false
         }
         if (e.type != KeyEventType.KeyDown) return@handler false
         val hk = e.toHotKey() ?: return@handler false
         val first = pressedKeys.add(e.key) // автоповтор зажатой клавиши игнорируем
+
+        if (first && !splashVisible && (!Hotkeys.typing || hk == HotKey.ESC || hk == HotKey.ENTER || hk == HotKey.F1 || hk == HotKey.F2)) {
+            Hotkeys.onKeyDown(hk)
+        }
 
         // F1 / F2 работают всегда
         if (hk == HotKey.F1) { if (first) exitProcess(0); return@handler true }
@@ -278,6 +285,10 @@ private fun runApp() = application {
             else -> Unit
         }
 
+        // Пока открыт экран «ХОТКЕИ», перехватываем остальные хоткеи (1/2/-/Tab/⌫/Space),
+        // чтобы нажатие проигрывало анимацию клавиши в окне хоткеев, не меняя счёт и фокус.
+        if (showHotkeys) return@handler true
+
         // клавиши матча — только на экране игры и когда не открыт ни один оверлей
         if (top != null || !inGame) return@handler false
         val actions = Hotkeys.matchActions ?: return@handler false
@@ -304,7 +315,10 @@ private fun runApp() = application {
         // Если окно потеряло фокус или было свёрнуто, KeyUp мог не прийти — забываем «зажатые» клавиши,
         // иначе следующее нажатие той же клавиши (например, F2) приняли бы за автоповтор.
         val windowFocused = LocalWindowInfo.current.isWindowFocused
-        LaunchedEffect(windowFocused, windowState.isMinimized) { pressedKeys.clear() }
+        LaunchedEffect(windowFocused, windowState.isMinimized) {
+            pressedKeys.clear()
+            Hotkeys.clearPressed()
+        }
 
         Box(modifier = Modifier.fillMaxSize()) {
             when (currentScreen) {
@@ -537,11 +551,20 @@ private fun Modifier.cardShadow(corner: Dp): Modifier = drawBehind {
     )
 }
 
-/** Пружинный масштаб при наведении/нажатии (как у остальных кнопок приложения). */
+/** Пружинный масштаб при наведении/нажатии (мышь или соответствующий хоткей). */
 @Composable
-private fun rememberPressScale(interaction: MutableInteractionSource): Float {
+private fun rememberPressScale(
+    interaction: MutableInteractionSource,
+    hotKey: HotKey? = null,
+    enabledWhenOverlayOpen: Boolean = false,
+): Float {
     val hovered by interaction.collectIsHoveredAsState()
-    val pressed by interaction.collectIsPressedAsState()
+    val mousePressed by interaction.collectIsPressedAsState()
+    val hkPress = rememberHotkeyPress(
+        hotKey,
+        enabled = enabledWhenOverlayOpen || Hotkeys.layers.isEmpty(),
+    )
+    val pressed = mousePressed || hkPress > 0.5f
     val hover = animateFloatAsState(
         targetValue = if (hovered) 1f else 0f,
         animationSpec = spring(dampingRatio = 0.6f, stiffness = 300f),
@@ -550,7 +573,7 @@ private fun rememberPressScale(interaction: MutableInteractionSource): Float {
     val pressSpec: AnimationSpec<Float> =
         if (pressed) tween(80) else spring(dampingRatio = 0.45f, stiffness = 500f)
     val press = animateFloatAsState(
-        targetValue = if (pressed) 1f else 0f,
+        targetValue = if (mousePressed) 1f else hkPress,
         animationSpec = pressSpec,
         label = "btnPress",
     )
@@ -575,7 +598,9 @@ private fun TeamLogoCircle(logo: ImageBitmap?, modifier: Modifier = Modifier) {
     }
 }
 
-/** Светло-синяя пилюля со счётом («00»): цифры — Blue Curve Bold 32 (type.scoreDigits). */
+/** Светло-синяя пилюля со счётом («00»): цифры — Blue Curve Bold 32 (type.scoreDigits).
+ *  В метриках BlueCurve-Bold descent значительно больше верхнего поля над прописными цифрами,
+ *  поэтому смещаем текст на +2 dp вниз, чтобы видимый глиф «00» стоял ровно по центру пилюли. */
 @Composable
 private fun ScorePill(
     value: String,
@@ -593,6 +618,7 @@ private fun ScorePill(
         BasicText(
             value,
             style = type.scoreDigits.copy(color = colors.pillText),
+            modifier = Modifier.offset(y = 2.dp),
             maxLines = 1, softWrap = false,
         )
     }
@@ -714,10 +740,14 @@ private fun SetsServePanel(
 /** Зелёная кнопка «+1» (видна только по ходу матча). */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun PlusOnePill(onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun PlusOnePill(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    hotKey: HotKey? = null,
+) {
     val type = ScoreKeeperTheme.typography
     val interaction = remember { MutableInteractionSource() }
-    val scale = rememberPressScale(interaction)
+    val scale = rememberPressScale(interaction, hotKey = hotKey)
     Box(
         modifier.size(94.dp, 48.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
@@ -813,12 +843,13 @@ private fun OutlineActionButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    hotKey: HotKey? = null,
     icon: @Composable () -> Unit,
 ) {
     val colors = ScoreKeeperTheme.colors
     val type = ScoreKeeperTheme.typography
     val interaction = remember { MutableInteractionSource() }
-    val scale = rememberPressScale(interaction)
+    val scale = rememberPressScale(interaction, hotKey = hotKey)
     Box(
         modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
@@ -862,7 +893,7 @@ private fun MainMatchButton(
     val colors = ScoreKeeperTheme.colors
     val type = ScoreKeeperTheme.typography
     val interaction = remember { MutableInteractionSource() }
-    val scale = rememberPressScale(interaction)
+    val scale = rememberPressScale(interaction, hotKey = HotKey.SPACE)
     Box(
         modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
@@ -913,7 +944,7 @@ private fun BackPill(text: String, onClick: () -> Unit, modifier: Modifier = Mod
     val colors = ScoreKeeperTheme.colors
     val type = ScoreKeeperTheme.typography
     val interaction = remember { MutableInteractionSource() }
-    val scale = rememberPressScale(interaction)
+    val scale = rememberPressScale(interaction, hotKey = HotKey.ESC)
     Box(
         modifier.size(173.dp, 49.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
@@ -958,7 +989,7 @@ private fun GreenActionButton(
     val colors = ScoreKeeperTheme.colors
     val type = ScoreKeeperTheme.typography
     val interaction = remember { MutableInteractionSource() }
-    val scale = rememberPressScale(interaction)
+    val scale = rememberPressScale(interaction, hotKey = HotKey.ENTER, enabledWhenOverlayOpen = true)
     Box(
         modifier.size(width, 55.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
@@ -1063,31 +1094,101 @@ private fun SideArrow(
     }
 }
 
-/** Круглый указатель L/R между стрелками: точные контуры и глифы букв из SVG 40×40. */
+/** Новый круглый значок «1 | 2» с круговой стрелкой между стрелками стороны поля (SVG 58×58).
+ *  Поддерживает светлую и тёмную темы; при смене стороны круговая стрелка прокручивается на 360°,
+ *  а цифры плавно меняются местами («1 | 2» ↔ «2 | 1»). Нажатие на сам значок тоже меняет сторону. */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun LrBadge(courtSide: String, modifier: Modifier = Modifier) {
-    val basePath = remember { PathParser().parsePathString("M39 20C39 30.4934 30.4934 39 20 39C9.50659 39 1 30.4934 1 20C1 9.50659 9.50659 1 20 1C30.4934 1 39 9.50659 39 20Z").toPath() }
-    val leftLetterPath = remember { PathParser().parsePathString("M7.19883 25.6V14.4C7.19883 14.0133 7.33216 13.6867 7.59883 13.42C7.87883 13.14 8.21216 13 8.59883 13C8.9855 13 9.31883 13.14 9.59883 13.42C9.86549 13.6867 9.99883 14.0133 9.99883 14.4V24.2H16.5988C16.9855 24.2 17.3188 24.3333 17.5988 24.6C17.8655 24.88 17.9988 25.2133 17.9988 25.6C17.9988 25.9867 17.8655 26.3133 17.5988 26.58C17.3188 26.86 16.9855 27 16.5988 27H8.59883C8.21216 27 7.87883 26.86 7.59883 26.58C7.33216 26.3133 7.19883 25.9867 7.19883 25.6Z").toPath() }
-    val rightLetterPath = remember { PathParser().parsePathString("M24.993 15.8V20.2H29.593C30.193 20.2 30.713 19.9867 31.153 19.56C31.5796 19.12 31.793 18.6 31.793 18C31.793 17.3867 31.5796 16.8667 31.153 16.44C30.713 16.0133 30.193 15.8 29.593 15.8H24.993ZM22.193 25.6V14.4C22.193 14.0133 22.3263 13.68 22.593 13.4C22.873 13.1333 23.2063 13 23.593 13H29.593C30.9663 13 32.1463 13.4867 33.133 14.46C34.1063 15.4467 34.593 16.6267 34.593 18C34.593 18.9067 34.3663 19.7467 33.913 20.52C33.4596 21.2667 32.8596 21.86 32.113 22.3L34.233 24.66C34.4863 24.9533 34.6063 25.2933 34.593 25.68C34.5663 26.0667 34.413 26.3867 34.133 26.64C33.8663 26.88 33.553 27 33.193 27C32.7796 27 32.433 26.8467 32.153 26.54L28.973 23H24.993V25.6C24.993 25.9867 24.8596 26.3133 24.593 26.58C24.313 26.86 23.9796 27 23.593 27C23.2063 27 22.873 26.86 22.593 26.58C22.3263 26.3133 22.193 25.9867 22.193 25.6Z").toPath() }
-    Canvas(modifier.size(40.dp)) {
-        val u = size.minDimension / 40f
+private fun LrBadge(
+    courtSide: String,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = ScoreKeeperTheme.colors
+    val isDark = colors.cardSurface != Color.White
+    val interaction = remember { MutableInteractionSource() }
+    val scale = rememberPressScale(interaction)
+
+    val onePath = remember {
+        PathParser().parsePathString(
+            "M22.5439 23.8946L22.5439 33.9746C22.5439 34.3226 22.4239 34.6166 22.1839 34.8566C21.9319 35.1086 21.6319 35.2346 21.2839 35.2346C20.9359 35.2346 20.6419 35.1086 20.4019 34.8566C20.1499 34.6166 20.0239 34.3226 20.0239 33.9746L20.0239 26.0726L19.3939 26.4326C19.0939 26.6006 18.7759 26.6426 18.4399 26.5586C18.1039 26.4626 17.8459 26.2646 17.6659 25.9646C17.4979 25.6646 17.4619 25.3466 17.5579 25.0106C17.6419 24.6746 17.8339 24.4166 18.1339 24.2366L20.6539 22.7966C21.0859 22.5566 21.5059 22.5566 21.9139 22.7966C22.3339 23.0486 22.5439 23.4146 22.5439 23.8946Z"
+        ).toPath()
+    }
+    val twoPath = remember {
+        PathParser().parsePathString(
+            "M42.4119 33.0746C42.6639 33.3266 42.7899 33.6266 42.7899 33.9746C42.7899 34.3226 42.6639 34.6166 42.4119 34.8566C42.1719 35.1086 41.8779 35.2346 41.5299 35.2346L32.8899 35.2346C32.5419 35.2346 32.2419 35.1086 31.9899 34.8566C31.7499 34.6166 31.6299 34.3226 31.6299 33.9746C31.6299 32.5586 32.3019 31.4246 33.6459 30.5726C34.1619 30.2486 34.7859 29.9546 35.5179 29.6906C35.8059 29.5946 36.1299 29.4926 36.4899 29.3846L36.9579 29.2586L37.3899 29.1326L37.7679 29.0246L38.1279 28.9346C38.3799 28.8506 38.5959 28.7786 38.7759 28.7186C39.4119 28.5026 39.8439 28.2086 40.0719 27.8366C40.1559 27.7046 40.2099 27.5666 40.2339 27.4226C40.2459 27.3746 40.2579 27.3206 40.2699 27.2606L40.2699 27.1886L40.2699 27.1346C40.2699 26.5826 39.9699 26.1146 39.3699 25.7306C38.7819 25.3466 38.0619 25.1546 37.2099 25.1546C36.5379 25.1546 35.8719 25.2986 35.2119 25.5866C34.6119 25.8506 34.1499 26.1626 33.8259 26.5226C33.5979 26.7866 33.3099 26.9306 32.9619 26.9546C32.6139 26.9786 32.3079 26.8766 32.0439 26.6486C31.7919 26.4086 31.6539 26.1146 31.6299 25.7666C31.6059 25.4306 31.7079 25.1306 31.9359 24.8666C32.5239 24.1946 33.3039 23.6546 34.2759 23.2466C35.2359 22.8386 36.2139 22.6346 37.2099 22.6346C38.7939 22.6346 40.1199 23.0666 41.1879 23.9306C42.2559 24.7826 42.7899 25.8506 42.7899 27.1346C42.7899 28.0466 42.5139 28.8446 41.9619 29.5286C41.3979 30.2246 40.6119 30.7466 39.6039 31.0946C39.3159 31.2026 38.8059 31.3586 38.0739 31.5626C36.5379 31.9826 35.4999 32.3666 34.9599 32.7146L41.5299 32.7146C41.8779 32.7146 42.1719 32.8346 42.4119 33.0746Z"
+        ).toPath()
+    }
+    val arrowArcPath = remember {
+        PathParser().parsePathString(
+            "M38.8487 13.6216C46.4491 18.2897 49.7011 27.9375 46.1101 36.3974C42.1537 45.718 31.3913 50.0663 22.0707 46.1099C12.7502 42.1536 8.40188 31.3912 12.3582 22.0706C15.2952 15.1515 21.9853 10.9706 29.0512 10.8968"
+        ).toPath()
+    }
+    val arrowHeadPath = remember {
+        PathParser().parsePathString(
+            "M26.0654 17.9308L29.2173 10.5054C29.2737 10.3724 29.3034 10.2297 29.3047 10.0852C29.306 9.94076 29.2788 9.79748 29.2246 9.66354C29.1705 9.52961 29.0906 9.40764 28.9893 9.30461C28.8881 9.20158 28.7675 9.1195 28.6346 9.06306L21.2091 5.91116"
+        ).toPath()
+    }
+    val innerClip = remember {
+        Path().apply { addOval(androidx.compose.ui.geometry.Rect(29.2339f - 17f, 29.2346f - 17f, 29.2339f + 17f, 29.2346f + 17f)) }
+    }
+
+    // Прокручиваем круговую стрелку по часовой стрелке на 360° при каждом переключении стороны.
+    var prevSide by remember { mutableStateOf(courtSide) }
+    var spinCount by remember { mutableStateOf(0) }
+    LaunchedEffect(courtSide) {
+        if (courtSide != prevSide) {
+            prevSide = courtSide
+            spinCount++
+        }
+    }
+    val arrowAngle by animateFloatAsState(
+        targetValue = spinCount * 360f,
+        animationSpec = tween(durationMillis = 480, easing = FastOutSlowInEasing),
+        label = "lrArrowSpin",
+    )
+    val swapT by animateFloatAsState(
+        targetValue = if (courtSide == "R") 1f else 0f,
+        animationSpec = tween(durationMillis = 360, easing = FastOutSlowInEasing),
+        label = "lrDigitsSwap",
+    )
+
+    val innerFill = if (isDark) colors.pillBg else Color.White
+    val digitColor = colors.overlayHeading // #2070F5 в светлой теме, #FFC300 в тёмной
+    val dividerColor = if (isDark) colors.fieldPlaceholder else CoinGray
+
+    Canvas(
+        modifier.size(58.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .hoverable(interaction).pointerHoverIcon(PointerIcon.Hand)
+            .clickable(interactionSource = interaction, indication = null, onClick = onToggle),
+    ) {
+        val u = size.minDimension / 58f
+        val pivot = Offset(29.2339f, 29.2349f)
         withTransform({ scale(u, u, Offset.Zero) }) {
-            drawPath(basePath, CoinGray)
-            drawPath(basePath, CoinRing, style = Stroke(2f))
-            drawArc(
-                Color.White,
-                startAngle = if (courtSide == "L") 90f else -90f,
-                sweepAngle = 180f, useCenter = true,
-                topLeft = Offset(3f, 3f), size = Size(34f, 34f),
+            drawCircle(CoinGray, radius = 19f, center = pivot)
+            drawCircle(CoinRing, radius = 19f, center = pivot, style = Stroke(2f))
+            drawCircle(innerFill, radius = 17f, center = Offset(29.2339f, 29.2346f))
+            clipPath(innerClip) {
+                withTransform({ translate(18.462f * swapT, 0f) }) {
+                    drawPath(onePath, digitColor)
+                }
+                withTransform({ translate(-15.928f * swapT, 0f) }) {
+                    drawPath(twoPath, digitColor)
+                }
+            }
+            drawLine(
+                dividerColor,
+                Offset(29.2339f, 18.2346f),
+                Offset(29.2339f, 40.7346f),
+                strokeWidth = 1f,
+                cap = StrokeCap.Round,
             )
-            drawPath(
-                leftLetterPath,
-                if (courtSide == "L") Color(0xFF2070F5) else Color(0xFFBCBCBC),
-            )
-            drawPath(
-                rightLetterPath,
-                if (courtSide == "R") Color(0xFF2070F5) else Color(0xFFBCBCBC),
-            )
+            val arrowStroke = Stroke(width = 3f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+            withTransform({ rotate(arrowAngle, pivot) }) {
+                drawPath(arrowArcPath, CoinRing, style = arrowStroke)
+                drawPath(arrowHeadPath, CoinRing, style = arrowStroke)
+            }
         }
     }
 }
@@ -1113,7 +1214,7 @@ private fun NumPillField(
                 color = colors.pillText, textAlign = TextAlign.Center,
             ),
             cursorBrush = SolidColor(colors.pillText),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp).trackTyping(),
+            modifier = Modifier.fillMaxWidth().offset(y = 2.dp).padding(horizontal = 6.dp).trackTyping(),
         )
     }
 }
@@ -1825,7 +1926,11 @@ private fun CorrectionDialogOverlay(
             onClick = { selectedCourtSide = "L" },
             modifier = Modifier.offset(200.dp, 446.dp),
         )
-        LrBadge(selectedCourtSide, Modifier.offset(373.dp, 454.dp))
+        LrBadge(
+            courtSide = selectedCourtSide,
+            onToggle = { selectedCourtSide = if (selectedCourtSide == "L") "R" else "L" },
+            modifier = Modifier.offset(364.dp, 445.dp),
+        )
         SideArrow(
             toLeft = false, selected = selectedCourtSide == "R",
             onClick = { selectedCourtSide = "R" },
@@ -1874,9 +1979,22 @@ private fun CloseMatchWarningDialog(
                 measurer, strings.areYouSure, title48,
                 colors.overlayHeading, colors.textStroke, 397f, 71f,
             )
-            centeredText(measurer, strings.closeWarningLine1, body36, colors.captionText, 397f, 179f)
-            centeredText(measurer, strings.closeWarningLine2, body36, colors.captionText, 397f, 224f)
-            centeredText(measurer, strings.closeWarningLine3, body36, CloseWarningRed, 397f, 269f)
+            // В RU строки уже умещаются в карточку 794 с запасом (~57 dp с краёв), а в EN средняя строка
+            // шире карточки — пропорционально уменьшаем кегль всех трёх строк, чтобы сохранялись поля ≥ 52 dp.
+            val lines = listOf(strings.closeWarningLine1, strings.closeWarningLine2, strings.closeWarningLine3)
+            val maxW = lines.maxOf { line ->
+                val l = measurer.measure(line, body36)
+                l.getLineRight(0) - l.getLineLeft(0)
+            }
+            val maxAllowedW = 690f * density
+            val fittedBody = if (maxW > maxAllowedW) {
+                body36.copy(fontSize = (36f * (maxAllowedW / maxW)).sp)
+            } else {
+                body36
+            }
+            centeredText(measurer, strings.closeWarningLine1, fittedBody, colors.captionText, 397f, 179f)
+            centeredText(measurer, strings.closeWarningLine2, fittedBody, colors.captionText, 397f, 224f)
+            centeredText(measurer, strings.closeWarningLine3, fittedBody, CloseWarningRed, 397f, 269f)
         }
         GreenActionButton(
             strings.confirm, 324.dp,
@@ -1977,7 +2095,7 @@ private fun ScoreTopBar(
 
         // пилюля «ХОТКЕИ [H]»
         val hotInteraction = remember { MutableInteractionSource() }
-        val hotScale = rememberPressScale(hotInteraction)
+        val hotScale = rememberPressScale(hotInteraction, hotKey = HotKey.H)
         Box(
             Modifier.offset(0.dp, 5.dp).size(133.dp, 42.dp)
                 .graphicsLayer { scaleX = hotScale; scaleY = hotScale }
@@ -2007,7 +2125,7 @@ private fun ScoreTopBar(
 
         // пилюля «← НАЗАД»
         val backInteraction = remember { MutableInteractionSource() }
-        val backScale = rememberPressScale(backInteraction)
+        val backScale = rememberPressScale(backInteraction, hotKey = HotKey.ESC)
         Box(
             Modifier.offset(439.dp, 0.dp).size(177.dp, 53.dp)
                 .graphicsLayer { scaleX = backScale; scaleY = backScale }
@@ -2038,9 +2156,22 @@ private fun ScoreTopBar(
 
 private val KeyBaseColor = Color(0xFFD7DFE2)
 private val KeyOutlineColor = Color(0xFF222222)
+private val KeyPressedTopColor = Color(0xFFD6EAFF)
 
 /** Что нарисовать внутри клавиши. (H здесь нет: H только открывает этот экран, см. runApp.) */
-private enum class KeyGlyph { ONE, TWO, MINUS, TAB, BACKSPACE, SPACE, ESC, TILDE, F1, F2, ENTER }
+private enum class KeyGlyph(val hotKey: HotKey) {
+    ONE(HotKey.ONE),
+    TWO(HotKey.TWO),
+    MINUS(HotKey.MINUS),
+    TAB(HotKey.TAB),
+    BACKSPACE(HotKey.BACKSPACE),
+    SPACE(HotKey.SPACE),
+    ESC(HotKey.ESC),
+    TILDE(HotKey.TILDE),
+    F1(HotKey.F1),
+    F2(HotKey.F2),
+    ENTER(HotKey.ENTER),
+}
 
 private class KeycapSpec(val glyph: KeyGlyph, val x: Float, val y: Float, val bodyW: Float)
 
@@ -2060,38 +2191,40 @@ private val HotkeyCaps = listOf(
     KeycapSpec(KeyGlyph.ENTER, 434.0f, 401.0f, 85.0f),
 )
 
-/** Тело клавиши в локальных координатах (левый верх тела = 0,0), единицы макета. */
-private fun DrawScope.drawKeycapShape(bodyW: Float) {
+/** Тело клавиши в локальных координатах (левый верх тела = 0,0), единицы макета.
+ *  [dy] — ход верхней грани вниз при нажатии (основание стоит на месте, передняя юбка сжимается). */
+private fun DrawScope.drawKeycapShape(bodyW: Float, dy: Float, pressTint: Float) {
     val bodyH = 45.31f
     val bodyRadius = CornerRadius(9.01f, 9.55f)
     val body = Path().apply {
-        addRoundRect(RoundRect(0f, 0f, bodyW, bodyH, bodyRadius))
+        addRoundRect(RoundRect(0f, dy, bodyW, bodyH, bodyRadius))
     }
-    // основание: выступает вниз и чуть вправо
+    val topFill = lerp(Color.White, KeyPressedTopColor, pressTint)
+    // основание: остаётся на месте, клавиша утапливается в него
     drawRoundRect(
         KeyBaseColor, Offset(-1.69f, 2.55f), Size(bodyW + 3.17f, 47.14f), CornerRadius(9.7f, 10.3f),
     )
     drawPath(body, KeyBaseColor)
     clipPath(body) {
-        // белая левая грань
+        // светлая левая грань
         val bevel = Path().apply {
-            moveTo(-4.04f, -5.04f); lineTo(10.30f, -5.04f); lineTo(10.30f, 27.67f)
-            lineTo(8.66f, 29.98f); lineTo(1.85f, 40.87f); lineTo(-0.92f, 45.77f)
+            moveTo(-4.04f, -5.04f + dy); lineTo(10.30f, -5.04f + dy); lineTo(10.30f, 27.67f + dy)
+            lineTo(8.66f, 29.98f + dy); lineTo(1.85f, 40.87f); lineTo(-0.92f, 45.77f)
             lineTo(-4.04f, 47.76f); close()
         }
-        drawPath(bevel, Color.White)
+        drawPath(bevel, topFill)
     }
-    // белая верхняя грань
+    // верхняя грань клавиши
     drawRoundRect(
-        Color.White, Offset(7.07f, 0f), Size(bodyW - 7.07f - 6.98f, 30.61f), CornerRadius(4.85f, 5.14f),
+        topFill, Offset(7.07f, dy), Size(bodyW - 7.07f - 6.98f, 30.61f), CornerRadius(4.85f, 5.14f),
     )
     clipPath(body) {
-        drawLine(KeyOutlineColor, Offset(8.20f, 29.98f), Offset(1.85f, 40.87f), 4f)
-        drawLine(KeyOutlineColor, Offset(bodyW - 8.04f, 30.22f), Offset(bodyW - 1.46f, 41.73f), 4f)
+        drawLine(KeyOutlineColor, Offset(8.20f, 29.98f + dy), Offset(1.85f, 40.87f), 4f)
+        drawLine(KeyOutlineColor, Offset(bodyW - 8.04f, 30.22f + dy), Offset(bodyW - 1.46f, 41.73f), 4f)
     }
     drawPath(body, KeyOutlineColor, style = Stroke(4f))
     drawRoundRect(
-        KeyOutlineColor, Offset(7.07f, 0f), Size(bodyW - 7.07f - 6.98f, 30.61f), CornerRadius(4.85f, 5.14f),
+        KeyOutlineColor, Offset(7.07f, dy), Size(bodyW - 7.07f - 6.98f, 30.61f), CornerRadius(4.85f, 5.14f),
         style = Stroke(4f),
     )
 }
@@ -2143,7 +2276,21 @@ private fun HotkeysOverlay(
         val type = ScoreKeeperTheme.typography
         val russian = language == AppLanguage.RU
         val measurer = rememberTextMeasurer()
-        RegisterHotkeyLayer(onBack = onBack, onConfirm = onBack)
+        val scope = rememberCoroutineScope()
+        var closingByEsc by remember { mutableStateOf(false) }
+        // По Esc сначала показываем короткий ход клавиши Esc вниз, затем закрываем окно;
+        // Enter оставляем свободным (onConfirm = null), чтобы его тоже можно было проверить в окне хоткеев.
+        RegisterHotkeyLayer(
+            onBack = {
+                if (!closingByEsc) {
+                    closingByEsc = true
+                    scope.launch { delay(125); onBack() }
+                }
+            },
+            onConfirm = null,
+        )
+
+        val pressMap = KeyGlyph.entries.associateWith { g -> rememberHotkeyPress(g.hotKey) }
 
         val title48 = type.teamLabel.copy(fontSize = 48.sp)
         val section24 = type.teamLabel.copy(fontSize = 24.sp)
@@ -2153,26 +2300,36 @@ private fun HotkeysOverlay(
         // «Esc» — шрифт BloggerSans-Medium (fonts/BloggerSans-Medium.ttf), как в макете.
         val escStyle = TextStyle(fontFamily = BloggerSans, fontSize = 12.sp)
 
-        // подпись: текст, x (левый край), базовая линия
-        class Lbl(val text: String, val x: Float, val y: Float)
+        // подпись: привязанная клавиша (для подсветки при нажатии), текст, x, базовая линия
+        class Lbl(val glyph: KeyGlyph, val text: String, val x: Float, val y: Float)
         val labels = if (russian) listOf(
-            Lbl("ДОБАВИТЬ ОЧКО", 97f, 175f), Lbl("КОМАНДЕ 1", 97f, 193f),
-            Lbl("ДОБАВИТЬ ОЧКО", 97f, 234.7f), Lbl("КОМАНДЕ 2", 97f, 252.7f),
-            Lbl("ОТКАТ", 97f, 300f), Lbl("КОРРЕКТИРОВКА", 117.7f, 361f), Lbl("СБРОС", 133f, 421f),
-            Lbl("НАЧАТЬ/", 207f, 468f), Lbl("ПРОДОЛЖИТЬ/", 207f, 486f), Lbl("ЗАВЕРШИТЬ МАТЧ", 207f, 504f),
-            Lbl("НАЗАД", 492.2f, 184f), Lbl("НАСТРОЙКИ", 492f, 244f),
-            Lbl("ЗАКРЫТЬ", 492f, 297f), Lbl("ПРИЛОЖЕНИЕ", 492f, 315f),
-            Lbl("СВЕРНУТЬ", 492f, 357f), Lbl("ПРИЛОЖЕНИЕ", 492f, 375f),
-            Lbl("ГОТОВО/", 536f, 422f), Lbl("ПОДТВЕРДИТЬ", 536f, 440f),
+            Lbl(KeyGlyph.ONE, "ДОБАВИТЬ ОЧКО", 97f, 175f), Lbl(KeyGlyph.ONE, "КОМАНДЕ 1", 97f, 193f),
+            Lbl(KeyGlyph.TWO, "ДОБАВИТЬ ОЧКО", 97f, 234.7f), Lbl(KeyGlyph.TWO, "КОМАНДЕ 2", 97f, 252.7f),
+            Lbl(KeyGlyph.MINUS, "ОТКАТ", 97f, 300f),
+            Lbl(KeyGlyph.TAB, "КОРРЕКТИРОВКА", 117.7f, 361f),
+            Lbl(KeyGlyph.BACKSPACE, "СБРОС", 133f, 421f),
+            Lbl(KeyGlyph.SPACE, "НАЧАТЬ/", 207f, 468f),
+            Lbl(KeyGlyph.SPACE, "ПРОДОЛЖИТЬ/", 207f, 486f),
+            Lbl(KeyGlyph.SPACE, "ЗАВЕРШИТЬ МАТЧ", 207f, 504f),
+            Lbl(KeyGlyph.ESC, "НАЗАД", 492.2f, 184f),
+            Lbl(KeyGlyph.TILDE, "НАСТРОЙКИ", 492f, 244f),
+            Lbl(KeyGlyph.F1, "ЗАКРЫТЬ", 492f, 297f), Lbl(KeyGlyph.F1, "ПРИЛОЖЕНИЕ", 492f, 315f),
+            Lbl(KeyGlyph.F2, "СВЕРНУТЬ", 492f, 357f), Lbl(KeyGlyph.F2, "ПРИЛОЖЕНИЕ", 492f, 375f),
+            Lbl(KeyGlyph.ENTER, "ГОТОВО/", 536f, 422f), Lbl(KeyGlyph.ENTER, "ПОДТВЕРДИТЬ", 536f, 440f),
         ) else listOf(
-            Lbl("ADD POINT TO", 97f, 175f), Lbl("TEAM 1", 97f, 193f),
-            Lbl("ADD POINT TO", 97f, 234.7f), Lbl("TEAM 2", 97f, 252.7f),
-            Lbl("UNDO", 97f, 300f), Lbl("CORRECTION", 117.7f, 361f), Lbl("RESET", 133f, 421f),
-            Lbl("START /", 207f, 468f), Lbl("CONTINUE /", 207f, 486f), Lbl("FINISH MATCH", 207f, 504f),
-            Lbl("BACK", 492.2f, 184f), Lbl("SETTINGS", 492f, 244f),
-            Lbl("CLOSE", 492f, 297f), Lbl("THE APP", 492f, 315f),
-            Lbl("MINIMIZE", 492f, 357f), Lbl("THE APP", 492f, 375f),
-            Lbl("DONE /", 536f, 422f), Lbl("CONFIRM", 536f, 440f),
+            Lbl(KeyGlyph.ONE, "ADD POINT TO", 97f, 175f), Lbl(KeyGlyph.ONE, "TEAM 1", 97f, 193f),
+            Lbl(KeyGlyph.TWO, "ADD POINT TO", 97f, 234.7f), Lbl(KeyGlyph.TWO, "TEAM 2", 97f, 252.7f),
+            Lbl(KeyGlyph.MINUS, "UNDO", 97f, 300f),
+            Lbl(KeyGlyph.TAB, "CORRECTION", 117.7f, 361f),
+            Lbl(KeyGlyph.BACKSPACE, "RESET", 133f, 421f),
+            Lbl(KeyGlyph.SPACE, "START /", 207f, 468f),
+            Lbl(KeyGlyph.SPACE, "CONTINUE /", 207f, 486f),
+            Lbl(KeyGlyph.SPACE, "FINISH MATCH", 207f, 504f),
+            Lbl(KeyGlyph.ESC, "BACK", 492.2f, 184f),
+            Lbl(KeyGlyph.TILDE, "SETTINGS", 492f, 244f),
+            Lbl(KeyGlyph.F1, "CLOSE", 492f, 297f), Lbl(KeyGlyph.F1, "THE APP", 492f, 315f),
+            Lbl(KeyGlyph.F2, "MINIMIZE", 492f, 357f), Lbl(KeyGlyph.F2, "THE APP", 492f, 375f),
+            Lbl(KeyGlyph.ENTER, "DONE /", 536f, 422f), Lbl(KeyGlyph.ENTER, "CONFIRM", 536f, 440f),
         )
 
         MatchDialogScaffold(cardHeight = 564.dp, onBack = onBack) {
@@ -2196,23 +2353,32 @@ private fun HotkeysOverlay(
                     colors.cardBorder, Offset(396f * u, 123f * u), Size(2f * u, 400f * u),
                     CornerRadius(1f * u),
                 )
-                // подписи
-                for (l in labels) plainText(measurer, l.text, label14, colors.captionText, l.x, l.y)
+                // подписи (при нажатии клавиши её описание подсвечивается акцентным цветом темы)
+                for (l in labels) {
+                    val p = (pressMap[l.glyph] ?: 0f).coerceIn(0f, 1f)
+                    val col = lerp(colors.captionText, colors.overlayHeading, p)
+                    plainText(measurer, l.text, label14, col, l.x + 2.5f * p, l.y)
+                }
                 // клавиши
                 for (cap in HotkeyCaps) {
+                    val rawPress = pressMap[cap.glyph] ?: 0f
+                    val p = rawPress.coerceIn(0f, 1f)
+                    val dy = (6.5f * rawPress).coerceIn(-0.8f, 8.5f)
                     withTransform({ translate(cap.x * u, cap.y * u); scale(u, u, Offset.Zero) }) {
-                        drawKeycapShape(cap.bodyW)
-                        drawKeycapGlyph(cap.glyph)
+                        drawKeycapShape(cap.bodyW, dy = dy, pressTint = p)
+                        withTransform({ translate(0f, dy) }) {
+                            drawKeycapGlyph(cap.glyph)
+                        }
                     }
-                    // значки-буквы: левый край и базовая линия внутри клавиши — по макету
+                    // значки-буквы смещаются вниз вместе с верхней гранью клавиши
                     when (cap.glyph) {
-                        KeyGlyph.ONE -> plainText(measurer, "1", glyph26, Color.Black, cap.x + 16.6f, cap.y + 25f)
-                        KeyGlyph.TWO -> plainText(measurer, "2", glyph26, Color.Black, cap.x + 12.6f, cap.y + 25f)
+                        KeyGlyph.ONE -> plainText(measurer, "1", glyph26, Color.Black, cap.x + 16.6f, cap.y + 25f + dy)
+                        KeyGlyph.TWO -> plainText(measurer, "2", glyph26, Color.Black, cap.x + 12.6f, cap.y + 25f + dy)
                         // «Esc» целиком шрифтом BloggerSans-Medium: строчные «sc» там естественно меньше «E».
-                        KeyGlyph.ESC -> plainText(measurer, "Esc", escStyle, Color.Black, cap.x + 11.87f, cap.y + 19f)
-                        KeyGlyph.TILDE -> plainText(measurer, "~", glyph26, Color.Black, cap.x + 13.6f, cap.y + 24.7f)
-                        KeyGlyph.F1 -> plainText(measurer, "F1", glyph13, Color.Black, cap.x + 14.6f, cap.y + 20f)
-                        KeyGlyph.F2 -> plainText(measurer, "F2", glyph13, Color.Black, cap.x + 12.6f, cap.y + 20f)
+                        KeyGlyph.ESC -> plainText(measurer, "Esc", escStyle, Color.Black, cap.x + 11.87f, cap.y + 19f + dy)
+                        KeyGlyph.TILDE -> plainText(measurer, "~", glyph26, Color.Black, cap.x + 13.6f, cap.y + 24.7f + dy)
+                        KeyGlyph.F1 -> plainText(measurer, "F1", glyph13, Color.Black, cap.x + 14.6f, cap.y + 20f + dy)
+                        KeyGlyph.F2 -> plainText(measurer, "F2", glyph13, Color.Black, cap.x + 12.6f, cap.y + 20f + dy)
                         else -> Unit
                     }
                 }
@@ -2520,10 +2686,12 @@ fun VoleyballScreen(
                         PlusOnePill(
                             onClick = { ApiClient.addPoint(0, apply) { errorMsg = it } },
                             modifier = Modifier.offset(366.dp, 49.dp),
+                            hotKey = HotKey.ONE,
                         )
                         PlusOnePill(
                             onClick = { ApiClient.addPoint(1, apply) { errorMsg = it } },
                             modifier = Modifier.offset(366.dp, 191.dp),
+                            hotKey = HotKey.TWO,
                         )
                     }
                     Box(Modifier.offset(31.dp, 143.dp).size(537.dp, 2.dp).background(colors.divider))
@@ -2572,18 +2740,21 @@ fun VoleyballScreen(
                             if (match.status == "FINISHED") 1450.dp else 1322.dp,
                             685.dp,
                         ).size(223.dp, 93.dp),
+                        hotKey = HotKey.BACKSPACE,
                     ) { ResetIcon(colors.headingBlue) }
                     if (match.status != "FINISHED") {
                         OutlineActionButton(
                             text = strings.undo,
                             onClick = undoAction,
                             modifier = Modifier.offset(1581.dp, 685.dp).size(223.dp, 93.dp),
+                            hotKey = HotKey.MINUS,
                         ) { UndoIcon(colors.headingBlue) }
                     }
                     OutlineActionButton(
                         text = strings.correction,
                         onClick = correctionAction,
                         modifier = Modifier.offset(1322.dp, 800.dp).size(481.dp, 93.dp),
+                        hotKey = HotKey.TAB,
                     ) { SlidersIcon(colors.headingBlue, colors.cardSurface) }
                 }
                 MainMatchButton(

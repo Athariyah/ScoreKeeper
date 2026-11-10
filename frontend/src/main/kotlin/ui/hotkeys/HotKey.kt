@@ -1,13 +1,19 @@
 package ui.hotkeys
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.focus.onFocusChanged
@@ -15,6 +21,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.utf16CodePoint
+import kotlinx.coroutines.delay
 
 // ───────────────────────── Горячие клавиши приложения ─────────────────────────
 //
@@ -84,6 +91,64 @@ object Hotkeys {
 
     /** true, пока курсор в текстовом поле: тогда 1, 2, -, Space, Tab и т.д. — обычный ввод. */
     var typing: Boolean by mutableStateOf(false)
+
+    /** Клавиши, физически зажатые прямо сейчас (между KeyDown и KeyUp). */
+    val held = mutableStateMapOf<HotKey, Boolean>()
+
+    /** Счётчик срабатываний каждой клавиши (растёт на каждый KeyDown) — нужен, чтобы даже
+     *  короткий тап успевал отыграть полную визуальную анимацию нажатия. */
+    val pressCount = mutableStateMapOf<HotKey, Int>()
+
+    fun onKeyDown(hk: HotKey) {
+        held[hk] = true
+        pressCount[hk] = (pressCount[hk] ?: 0) + 1
+    }
+
+    fun onKeyUp(hk: HotKey) {
+        held.remove(hk)
+    }
+
+    fun clearPressed() {
+        held.clear()
+    }
+}
+
+/**
+ * Анимированный прогресс нажатия горячей клавиши (0f — отпущена, 1f — нажата):
+ *  • при коротком нажатии держит импульс ~145 мс, чтобы ход клавиши вниз всегда был заметен;
+ *  • при удержании остаётся нажатой до KeyUp, затем пружинно возвращается.
+ */
+@Composable
+fun rememberHotkeyPress(hotKey: HotKey?, enabled: Boolean = true): Float {
+    if (hotKey == null) return 0f
+    val isHeld = enabled && Hotkeys.held[hotKey] == true
+    val count = Hotkeys.pressCount[hotKey] ?: 0
+    var lastSeen by remember(hotKey) { mutableStateOf(count) }
+    var pulse by remember(hotKey) { mutableStateOf(false) }
+
+    LaunchedEffect(count, enabled) {
+        if (!enabled) {
+            lastSeen = count
+            pulse = false
+            return@LaunchedEffect
+        }
+        if (count != lastSeen) {
+            lastSeen = count
+            pulse = false
+            withFrameNanos { }
+            pulse = true
+            delay(145)
+            pulse = false
+        }
+    }
+
+    val active = isHeld || pulse
+    val spec = if (active) tween<Float>(60) else spring(dampingRatio = 0.55f, stiffness = 480f)
+    return animateFloatAsState(
+        targetValue = if (active) 1f else 0f,
+        animationSpec = spec,
+        label = "hkPress_$hotKey",
+    ).value
 }
 
 /** Регистрирует оверлей в стеке клавиатуры на время, пока он на экране. */
