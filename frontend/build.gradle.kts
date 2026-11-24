@@ -16,6 +16,12 @@ val githubRepo = (findProperty("githubRepo") as String?) ?: "Athariyah/ScoreKeep
 group = "com.example"
 version = appVersion
 
+// Сборка всегда на JDK 17: Kotlin 1.9 не работает на JDK новее 21.
+// Демон Gradle сам выбирает JDK 17 (gradle/gradle-daemon-jvm.properties), даже если JAVA_HOME указывает на JDK 27.
+kotlin {
+    jvmToolchain(17)
+}
+
 tasks.processResources {
     inputs.property("appVersion", appVersion)
     inputs.property("githubRepo", githubRepo)

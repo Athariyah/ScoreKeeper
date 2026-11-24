@@ -83,7 +83,18 @@ jobs:
         working-directory: frontend
         env:
           APP_VERSION: ${{ steps.ver.outputs.version }}
-        run: .\gradlew.bat --no-daemon createDistributable "-PappVersion=$env:APP_VERSION" "-PgithubRepo=$env:GITHUB_REPOSITORY"
+        run: |
+          .\gradlew.bat --no-daemon --stacktrace createDistributable "-PappVersion=$env:APP_VERSION" "-PgithubRepo=$env:GITHUB_REPOSITORY" 2>&1 | Tee-Object -FilePath gradle-build.log
+          if ($LASTEXITCODE -ne 0) {
+            # Показываем причину ошибки в аннотациях запуска, чтобы её было видно без открытия лога.
+            $log = Get-Content gradle-build.log
+            $i = [Array]::FindIndex($log, [Predicate[string]]{ param($l) $l -match 'What went wrong' })
+            $reason = if ($i -ge 0) { $log[$i..([Math]::Min($i + 12, $log.Count - 1))] } else { $log | Select-Object -Last 25 }
+            $errors = $log | Where-Object { $_ -match '^e: ' } | Select-Object -First 10
+            $text = (($errors + $reason) -join '%0A')
+            Write-Output "::error title=Gradle build failed::$text"
+            exit 1
+          }
 
       # ── лаунчер и папка релиза ──
       - name: Собрать лаунчер и папку релиза
