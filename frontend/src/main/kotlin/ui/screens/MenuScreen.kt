@@ -1,5 +1,9 @@
 package ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +43,7 @@ import ui.theme.LocalStage
 import ui.theme.ScoreKeeperTheme
 import ui.theme.colorsFor
 import ui.theme.stringsFor
+import update.AppInfo
 
 /**
  * Главный экран. Координаты взяты из Figma (кадр «Главный экран», 1920×1080).
@@ -53,6 +58,11 @@ fun MenuScreen(
     onMinimize: () -> Unit,
     darkTheme: Boolean,
     language: AppLanguage,
+    // Обновление приложения: окно показывается только здесь, на главном экране.
+    showUpdate: Boolean = false,
+    onUpdateNow: () -> Unit = {},
+    onUpdateLater: () -> Unit = {},
+    onUpdateClose: () -> Unit = {},
 ) {
     ScoreKeeperTheme(colors = colorsFor(darkTheme), strings = stringsFor(language)) {
         val colors = ScoreKeeperTheme.colors
@@ -111,9 +121,19 @@ fun MenuScreen(
                 Modifier.align(Alignment.BottomStart).padding(start = 23.dp, bottom = 17.dp),
             )
             InfoChip(
-                "version: 1.1",
+                "version: ${AppInfo.version}",
                 Modifier.align(Alignment.BottomEnd).padding(end = 34.dp, bottom = 17.dp),
             )
+
+            // Окно «Новое обновление!» (координаты из макета: левый верхний угол, отступы 11 и 17).
+            AnimatedVisibility(
+                visible = showUpdate,
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 11.dp, top = 17.dp),
+                enter = fadeIn() + slideInVertically { -it / 2 },
+                exit = ExitTransition.None,
+            ) {
+                UpdatePopup(onNow = onUpdateNow, onLater = onUpdateLater, onClose = onUpdateClose)
+            }
         }
     }
 }

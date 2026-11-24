@@ -7,8 +7,22 @@ plugins {
     id("org.jetbrains.compose") version "1.6.11"
 }
 
+// Версию и репозиторий релизов подставляет GitHub Actions: -PappVersion=1.2.1 -PgithubRepo=owner/repo.
+// Они попадают в app.properties и нужны приложению для проверки обновлений (update/AppInfo.kt).
+val appVersion = (findProperty("appVersion") as String?) ?: "1.2.0"
+// Репозиторий с релизами. На GitHub Actions подставляется автоматически (github.repository).
+val githubRepo = (findProperty("githubRepo") as String?) ?: "Athariyah/ScoreKeeper"
+
 group = "com.example"
-version = "1.0.0"
+version = appVersion
+
+tasks.processResources {
+    inputs.property("appVersion", appVersion)
+    inputs.property("githubRepo", githubRepo)
+    filesMatching("app.properties") {
+        expand("appVersion" to appVersion, "githubRepo" to githubRepo)
+    }
+}
 
 repositories {
     mavenCentral()
@@ -37,7 +51,10 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "ScoreKeeper"
-            packageVersion = "1.0.0"
+            packageVersion = appVersion
+            // Без этого модуля в урезанной Java из установщика не работает HTTPS к github.com
+            // (сертификаты GitHub на эллиптических кривых) — приложение не нашло бы обновления.
+            modules("jdk.crypto.ec")
             windows {
                 iconFile.set(project.file("src/main/resources/app_icon.ico"))
             }

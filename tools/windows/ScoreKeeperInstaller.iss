@@ -1,4 +1,8 @@
 ; Build the complete Windows release folder before compiling this script.
+; Version: ISCC /DAppVersion=1.2.1 ScoreKeeperInstaller.iss (GitHub Actions does this from the release tag).
+#ifndef AppVersion
+  #define AppVersion "1.2.0"
+#endif
 #define ReleaseDir "..\..\ScorekeeperAppRelease"
 #define IconFile "..\..\frontend\src\main\resources\app_icon.ico"
 
@@ -15,12 +19,13 @@
 [Setup]
 AppId={{89D3C442-EFB2-4843-85D1-B0CF50245A2A}
 AppName=ScoreKeeper
-AppVersion=1.0.0
+AppVersion={#AppVersion}
+VersionInfoVersion={#AppVersion}
 DefaultDirName={localappdata}\Programs\ScoreKeeper
 DefaultGroupName=ScoreKeeper
 PrivilegesRequired=lowest
 OutputDir=..\..\installer-output
-OutputBaseFilename=ScoreKeeper-Setup
+OutputBaseFilename=ScoreKeeper-Setup-{#AppVersion}
 SetupIconFile={#IconFile}
 UninstallDisplayIcon={app}\ScoreKeeper.exe
 Compression=lzma2

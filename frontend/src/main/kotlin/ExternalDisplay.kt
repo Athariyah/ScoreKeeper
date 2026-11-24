@@ -1,4 +1,11 @@
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -89,45 +96,88 @@ fun ApplicationScope.ExternalScoreboardWindow(
         // Страховка: некоторые ОС игнорируют стартовую позицию — выставляем границы явно.
         LaunchedEffect(display) { window.bounds = Rectangle(b) }
 
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFF002296))
-                .clipToBounds()
+        ScoreboardViewport(Modifier.fillMaxSize()) {
+            AudienceScreen(
+                match = match,
+                logo1 = logo1,
+                logo2 = logo2,
+                tickerText = tickerText,
+                courtSide = courtSide,
+                strings = strings,
+            )
+        }
+    }
+}
+
+/**
+ * Внутренняя область табло БЕЗ рамки и скруглённых углов (в единицах пространства 1129×698).
+ * Рамку и углы на ТВ не показываем: табло занимает весь экран.
+ */
+private const val VISIBLE_WIDTH = 1055f
+private const val VISIBLE_HEIGHT = 654f
+private const val VISIBLE_LEFT = 37f
+private const val VISIBLE_TOP = 22f
+
+/**
+ * Общий «видоискатель» табло: и окно на ТВ, и предпросмотр в админке рисуют табло ТОЛЬКО через него.
+ *
+ *  • Содержимое (тексты, логотипы, плашки) масштабируется РАВНОМЕРНО — круги остаются кругами,
+ *    цифры не растягиваются, на какой бы экран и в каком бы окне оно ни выводилось.
+ *  • Фон (тёмная заливка и цветные диагонали) растягивается на всю область, поэтому на экране
+ *    любых пропорций (16:9 на ТВ) нет пустых полос по бокам.
+ */
+@Composable
+fun ScoreboardViewport(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    BoxWithConstraints(modifier = modifier.clipToBounds()) {
+        Canvas(Modifier.fillMaxSize()) {
+            val sx = size.width / VISIBLE_WIDTH
+            val sy = size.height / VISIBLE_HEIGHT
+            withTransform({
+                scale(sx, sy, Offset.Zero)
+                translate(-VISIBLE_LEFT, -VISIBLE_TOP)
+            }) {
+                drawBoardBackdrop()
+            }
+        }
+
+        val fit = minOf(maxWidth.value / VISIBLE_WIDTH, maxHeight.value / VISIBLE_HEIGHT)
+        val baseDensity = LocalDensity.current
+        CompositionLocalProvider(
+            LocalDensity provides Density(baseDensity.density * fit, 1f),
         ) {
-            // Внутренняя область табло БЕЗ голубой рамки и скруглённых углов.
-            // Если захотите чуть сильнее/слабее обрезать края — уменьшите/увеличьте эти 2 числа:
-            val visibleWidth = 1055f
-            val visibleHeight = 654f
-
-            val scaleX = maxWidth.value / visibleWidth
-            val scaleY = maxHeight.value / visibleHeight
-            val baseDensity = LocalDensity.current
-
-            CompositionLocalProvider(
-                LocalDensity provides Density(baseDensity.density * scaleY, 1f),
+            // Центр видимой области табло совпадает с центром блока 1129×698 — выравниваем по центру.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .requiredSize(1129.dp, 698.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .requiredSize(1129.dp, 698.dp)
-                        .graphicsLayer {
-                            // Растягиваем по горизонтали до полного заполнения 16:9 экрана ТВ
-                            this.scaleX = scaleX / scaleY
-                        }
-                ) {
-                    AudienceScreen(
-                        match = match,
-                        logo1 = logo1,
-                        logo2 = logo2,
-                        tickerText = tickerText,
-                        courtSide = courtSide,
-                        strings = strings,
-                    )
-                }
+                content()
             }
         }
     }
+}
+
+/** Фон табло в координатах 1129×698: тёмная заливка, синяя и красная диагонали. */
+private fun DrawScope.drawBoardBackdrop() {
+    drawRect(Color(0xFF070F2B), topLeft = Offset.Zero, size = Size(1129f, 698f))
+    // тёмно-синяя диагональная полоса (в макете — с прозрачностью 0.6)
+    val navy = Path().apply {
+        moveTo(7f, 691f); lineTo(743.3f, 7f); lineTo(1122f, 7f); lineTo(1122f, 212.2f); close()
+    }
+    drawPath(
+        navy,
+        Brush.verticalGradient(listOf(Color(0xFF2A5298), Color(0xFF1E3C72)), startY = 7f, endY = 691f),
+        alpha = 0.6f,
+    )
+    // красная диагональ (в макете — с прозрачностью 0.9)
+    val red = Path().apply {
+        moveTo(7f, 691f); lineTo(1122f, 100f); lineTo(1122f, 691f); close()
+    }
+    drawPath(
+        red,
+        Brush.horizontalGradient(listOf(Color(0xFFBA0C24), Color(0xFFF21B3F)), startX = 7f, endX = 1122f),
+        alpha = 0.9f,
+    )
 }
 
 /** Windows: переключает режим экранов на «Расширить» (как Win+P → Расширить), чтобы ТВ не дублировал ноутбук. */

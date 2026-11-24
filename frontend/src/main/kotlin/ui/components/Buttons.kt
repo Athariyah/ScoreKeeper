@@ -150,10 +150,10 @@ fun SportButton(
 
 @Composable
 fun VolleyballIcon(modifier: Modifier = Modifier) {
-    // Картинка извлечена из вашего SVG (resources/volleyball_ball.png, 800×800).
+    // Картинка извлечена из вашего SVG (resources/volleyball_ball.svg, векторный).
     // В SVG: круг r=36 с этой картинкой + белая обводка 3 — то же самое здесь.
     Image(
-        painter = painterResource("volleyball_ball.png"),
+        painter = painterResource("volleyball_ball.svg"),
         contentDescription = null,
         contentScale = ContentScale.FillBounds,
         modifier = modifier.clip(CircleShape).border(3.dp, Color.White, CircleShape),

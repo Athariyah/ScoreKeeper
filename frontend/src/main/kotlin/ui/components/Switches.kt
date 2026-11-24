@@ -26,6 +26,7 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import ui.theme.AppLanguage
+import ui.theme.DarkColors
 import ui.theme.ScoreKeeperTheme
 
 // ───────────────────────── Переключатели из Figma (ваши SVG) ─────────────────────────
@@ -169,6 +170,44 @@ fun LanguageSwitch(
             drawPath(pill, colors.cardSurface)
             drawPath(ruPath, lerp(colors.overlayHeading, colors.langUnselected, tc))
             drawPath(enPath, lerp(colors.langUnselected, colors.overlayHeading, tc))
+        }
+    }
+}
+
+/**
+ * Тумблер «включено / выключено» того же вида, что и переключатель темы (рамка, дорожка, круглая ручка 94×50),
+ * но без иконок луны и солнца. Включённая ручка «горит»: жёлтая в тёмной теме, светло-голубая (#E5F2FD) в светлой.
+ * Выключенная — тёмно-синяя в тёмной теме и тёмно-серая в светлой.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+fun FeatureSwitch(checked: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = ScoreKeeperTheme.colors
+    val dark = colors === DarkColors
+    val knobOn = if (dark) SwitchIcon else Color(0xFFE5F2FD)
+    val knobOff = if (dark) Color(0xFF141F31) else Color(0xFF30373D)
+    val t by animateFloatAsState(
+        targetValue = if (checked) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.75f, stiffness = 400f),
+        label = "featureKnob",
+    )
+
+    Canvas(
+        modifier
+            .size(94.dp, 50.dp)
+            .pointerHoverIcon(PointerIcon.Hand)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onToggle,
+            ),
+    ) {
+        val s = size.width / 94f
+        val tc = t.coerceIn(0f, 1f)
+        withTransform({ scale(s, s, Offset.Zero) }) {
+            drawRoundRect(colors.cardBorder, Offset.Zero, Size(94f, 50f), CornerRadius(25f))
+            drawRoundRect(SwitchTrack, Offset(4f, 4f), Size(86f, 42f), CornerRadius(21f))
+            drawCircle(lerp(knobOff, knobOn, tc), radius = 18f, center = Offset(mix(28f, 66f, tc), 25f))
         }
     }
 }

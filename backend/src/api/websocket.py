@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import WebSocket
 
 
@@ -6,6 +8,7 @@ class ConnectionManager:
 
     def __init__(self) -> None:
         self.active_connections: list[WebSocket] = []
+        self._send_lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket) -> None:
         """Установка WebSocket-соединения."""
@@ -18,9 +21,17 @@ class ConnectionManager:
             self.active_connections.remove(websocket)
 
     async def broadcast(self, message: dict) -> None:
-        """Транслирование состояния матча."""
-        for connection in self.active_connections:
-            await connection.send_json(message)
+        """Транслирование состояния матча. Оборванное соединение не должно ломать запрос оператора.
+
+        Рассылка идёт под замком: при быстрых нажатиях несколько запросов не пишут в один сокет одновременно,
+        а сообщения уходят строго в том порядке, в котором менялся счёт.
+        """
+        async with self._send_lock:
+            for connection in list(self.active_connections):
+                try:
+                    await connection.send_json(message)
+                except Exception:
+                    self.disconnect(connection)
 
 
 manager = ConnectionManager()

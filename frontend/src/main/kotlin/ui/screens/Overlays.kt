@@ -73,6 +73,7 @@ import ui.hotkeys.trackTyping
 import ui.theme.AppLanguage
 import ui.theme.DesignStage
 import ui.theme.ScoreKeeperTheme
+import ui.theme.gameNumbers
 import ui.theme.colorsFor
 import ui.theme.stringsFor
 
@@ -98,13 +99,15 @@ internal fun FigmaText(
     modifier: Modifier = Modifier,
     textAlign: TextAlign = TextAlign.Start,
     fixedWidth: Dp? = null,
+    /** true — цифры рисуются по правилу игр: «0» Blue Curve Bold, остальные Aqum Two. */
+    gameDigits: Boolean = false,
 ) {
     val measurer = rememberTextMeasurer()
     val dens = LocalDensity.current
     val strokeColor = ScoreKeeperTheme.colors.textStroke
-    val layout = remember(text, style, textAlign, fixedWidth, dens) {
+    val layout = remember(text, style, textAlign, fixedWidth, dens, gameDigits) {
         measurer.measure(
-            text = AnnotatedString(text),
+            text = if (gameDigits) gameNumbers(text) else AnnotatedString(text),
             style = style.copy(textAlign = textAlign),
             constraints = if (fixedWidth != null) {
                 // minWidth = maxWidth: параграф занимает всю заданную ширину,

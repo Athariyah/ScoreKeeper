@@ -14,9 +14,16 @@ import ui.hotkeys.RegisterMatchHotkeys
 import ui.hotkeys.rememberHotkeyPress
 import ui.hotkeys.toHotKey
 import ui.hotkeys.trackTyping
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.focus.onFocusChanged
+import ui.components.GameDigitsText
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
@@ -85,6 +92,7 @@ import com.example.ApiClient
 import com.example.ScoreResponse
 import com.example.TennisSetScore
 import com.example.VolleyballSetScore
+import kotlin.math.ceil
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.skia.Image
@@ -105,11 +113,14 @@ import ui.theme.ArialFamily
 import ui.theme.BloggerSans
 import ui.theme.RuStrings
 import ui.theme.Brand
+import ui.theme.gameNumbers
+import ui.components.FeatureSwitch
 import ui.theme.DesignStage
 import ui.theme.LocalStage
 import ui.theme.ScoreKeeperTheme
 import ui.theme.colorsFor
 import ui.theme.stringsFor
+import update.UpdateManager
 import java.io.File
 import kotlin.system.exitProcess
 
@@ -147,6 +158,43 @@ private fun volleyballPresetFor(setCount: Int, points: List<Int>): VolleyballPre
     else -> VolleyballPreset.CUSTOM
 }
 
+/**
+ * Идущий тайм-аут (волейбол, 30 с) или перерыв на смену сторон (теннис, 90 с).
+ * Время окончания считаем по локальным часам в момент получения счёта: так предпросмотр и ТВ
+ * идут синхронно и не зависят от часов бэкенда.
+ */
+data class MatchTimer(
+    val kind: String,
+    val team: Int?,
+    val durationSec: Int,
+    val endsAtMs: Long,
+) {
+    val isChangeover: Boolean get() = kind == "changeover"
+}
+
+/** Сколько миллисекунд осталось у таймера (0 — таймера нет или он истёк). Обновляется каждые 100 мс. */
+@Composable
+fun rememberTimerRemainingMillis(timer: MatchTimer?): Long {
+    var remaining by remember(timer) {
+        mutableStateOf(timer?.let { (it.endsAtMs - System.currentTimeMillis()).coerceAtLeast(0L) } ?: 0L)
+    }
+    LaunchedEffect(timer) {
+        if (timer == null) {
+            remaining = 0L
+            return@LaunchedEffect
+        }
+        while (true) {
+            remaining = (timer.endsAtMs - System.currentTimeMillis()).coerceAtLeast(0L)
+            if (remaining <= 0L) break
+            delay(100L)
+        }
+    }
+    return remaining
+}
+
+/** Секунды для показа на табло: округляем вверх, чтобы «00:00» появлялось только по окончании. */
+fun timerSeconds(remainingMillis: Long): Int = ceil(remainingMillis / 1000.0).toInt()
+
 data class MatchState(
     val team1: String = "КОМАНДА 1",
     val team2: String = "КОМАНДА 2",
@@ -162,7 +210,19 @@ data class MatchState(
     val tennisPoints: List<Int>? = null,
     val tennisGames: List<Int>? = null,
     val server: Int = 0,
-    val winner: Int? = null
+    val winner: Int? = null,
+    /** Тайм-ауты, взятые командами в текущей партии (волейбол). */
+    val timeoutsUsed: List<Int> = listOf(0, 0),
+    val timeoutsPerSet: Int = 2,
+    val timer: MatchTimer? = null,
+    /** Теннис: счёт завершённых сетов по порядку, например [[6, 3], [4, 6]]. */
+    val setScores: List<List<Int>> = emptyList(),
+    /** Теннис: идёт тай-брейк (очки показываются обычными числами). */
+    val tiebreak: Boolean = false,
+    /** Теннис: подающий меняется сам после каждого гейма. */
+    val autoServe: Boolean = true,
+    /** Версия состояния с бэкенда: более старое состояние не должно перезаписывать более новое. */
+    val revision: Long = 0,
 ) {
     companion object {
         fun fromResponse(r: ScoreResponse): MatchState {
@@ -184,7 +244,21 @@ data class MatchState(
                 tennisPoints = r.points,
                 tennisGames = r.games,
                 server = r.server,
-                winner = r.winner
+                winner = r.winner,
+                timeoutsUsed = r.timeoutsUsed ?: listOf(0, 0),
+                timeoutsPerSet = r.timeoutsPerSet ?: 2,
+                setScores = r.setScores ?: emptyList(),
+                tiebreak = r.tiebreak ?: false,
+                autoServe = r.autoServe ?: true,
+                revision = r.revision ?: 0L,
+                timer = r.timer?.let {
+                    MatchTimer(
+                        kind = it.kind,
+                        team = it.team,
+                        durationSec = it.duration,
+                        endsAtMs = System.currentTimeMillis() + (it.remaining * 1000).toLong(),
+                    )
+                },
             )
         }
     }
@@ -192,6 +266,7 @@ data class MatchState(
 
 fun main() {
     forceExtendedDisplayOnWindows()
+    UpdateManager.installShutdownHook()   // «Позже»: обновление ставится, когда приложение закрыто
     runApp()
 }
 
@@ -218,6 +293,9 @@ private fun runApp() = application {
     var language by remember { mutableStateOf(AppLanguage.RU) }
     var showSettings by remember { mutableStateOf(false) }
     var showHotkeys by remember { mutableStateOf(false) }
+
+    // Автообновление: один раз за запуск смотрим релизы GitHub (только при Wi-Fi), окно — на главном экране.
+    LaunchedEffect(Unit) { UpdateManager.checkOnce() }
 
     // Загрузочный экран: при запуске приложения и при переходах меню ↔ режим игры.
     var splashVisible by remember { mutableStateOf(true) }
@@ -348,13 +426,18 @@ private fun runApp() = application {
                     onMinimize = { windowState.isMinimized = true },
                     darkTheme = darkTheme,
                     language = language,
+                    showUpdate = UpdateManager.popupVisible && !splashVisible,
+                    onUpdateNow = { UpdateManager.installNow(if (language == AppLanguage.EN) "en" else "ru") },
+                    onUpdateLater = UpdateManager::installLater,
+                    onUpdateClose = UpdateManager::dismiss,
                 )
 
                 Screen.tennis, Screen.valeball -> VoleyballScreen(
                     sport = if (currentScreen == Screen.tennis) "tennis" else "volleyball",
                     onBack = { currentScreen = Screen.menu; splashKey++ },
                     name1 = gameName1, name2 = gameName2, logo1 = gameLogo1, logo2 = gameLogo2,
-                    match = match, onMatchUpdate = { match = it },
+                    // При быстрых нажатиях ответы сервера могут прийти не по порядку — старый не затирает новый.
+                    match = match, onMatchUpdate = { if (it.revision >= match.revision) match = it },
                     volleyballSettings = volleyballSettings,
                     tickerText = tickerText, onTickerUpdate = { tickerText = it }, // 👈 ПЕРЕДАЕМ ТЕКСТ
                     darkTheme = darkTheme,
@@ -633,12 +716,8 @@ private fun ScorePill(
         modifier.size(width, height).clip(RoundedCornerShape(corner)).background(colors.pillBg),
         contentAlignment = Alignment.Center,
     ) {
-        BasicText(
-            value,
-            style = type.scoreDigits.copy(color = colors.pillText),
-            modifier = Modifier.offset(y = 2.dp),
-            maxLines = 1, softWrap = false,
-        )
+        // Фиксированные слоты цифр и общая база: при смене очков цифры не съезжают.
+        GameDigitsText(value, type.scoreDigits, colors.pillText)
     }
 }
 
@@ -652,7 +731,7 @@ private fun CardTab(text: String, modifier: Modifier = Modifier, width: Dp = 230
         contentAlignment = Alignment.Center,
     ) {
         BasicText(
-            text,
+            gameNumbers(text),
             style = type.teamLabel.copy(fontSize = 26.sp, color = colors.headingBlue),
             maxLines = 1, softWrap = false,
         )
@@ -696,6 +775,8 @@ private fun SetsServePanel(
     showServe: Boolean,
     tabText: String,
     modifier: Modifier = Modifier,
+    timeouts: PanelTimeouts? = null,
+    setScores: List<List<Int>> = emptyList(),
 ) {
     val colors = ScoreKeeperTheme.colors
     val type = ScoreKeeperTheme.typography
@@ -718,9 +799,10 @@ private fun SetsServePanel(
         TeamLogoCircle(logo2, Modifier.offset(56.5.dp, 115.5.dp))
         if (showServe && server == 0) ServeGlowDot(Modifier.offset(101.5.dp, 57.5.dp))
         if (showServe && server == 1) ServeGlowDot(Modifier.offset(101.5.dp, 161.5.dp))
-        // названия команд
+        // названия команд (при кнопках тайм-аута имя занимает меньше места)
+        val nameWidth = if (timeouts != null || setScores.isNotEmpty()) 450.dp else 720.dp
         Box(
-            Modifier.offset(163.5.dp, 11.5.dp).size(720.dp, 80.dp),
+            Modifier.offset(163.5.dp, 11.5.dp).size(nameWidth, 80.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             BasicText(
@@ -729,12 +811,36 @@ private fun SetsServePanel(
             )
         }
         Box(
-            Modifier.offset(163.5.dp, 115.5.dp).size(720.dp, 80.dp),
+            Modifier.offset(163.5.dp, 115.5.dp).size(nameWidth, 80.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             BasicText(
                 name2, style = type.teamLabel.copy(color = colors.headingBlue),
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        // Теннис: счёт завершённых сетов по строкам игроков — как на классическом табло («6  4» / «3  6»).
+        if (setScores.isNotEmpty()) {
+            for ((row, y) in listOf(0 to 24.5.dp, 1 to 128.5.dp)) {
+                Box(Modifier.offset(640.dp, y).size(280.dp, 53.dp), contentAlignment = Alignment.CenterEnd) {
+                    GameDigitsText(
+                        setScores.joinToString("   ") { "${it.getOrElse(row) { 0 }}" },
+                        type.scoreDigits.copy(fontSize = 30.sp), colors.headingBlue.copy(alpha = 0.75f),
+                    )
+                }
+            }
+        }
+        // тайм-ауты: у каждой команды в строке свою кнопку (волейбол: 2 тайм-аута по 30 с в партии)
+        if (timeouts != null) {
+            TimeoutButton(
+                text = timeouts.label, used = timeouts.used1, limit = timeouts.limit,
+                enabled = timeouts.enabled, onClick = timeouts.onTimeout1,
+                modifier = Modifier.offset(640.dp, 24.5.dp),
+            )
+            TimeoutButton(
+                text = timeouts.label, used = timeouts.used2, limit = timeouts.limit,
+                enabled = timeouts.enabled, onClick = timeouts.onTimeout2,
+                modifier = Modifier.offset(640.dp, 128.5.dp),
             )
         }
         // пилюли выигранных партий
@@ -751,6 +857,159 @@ private fun SetsServePanel(
                 style = type.teamLabel.copy(color = colors.headingBlue, lineHeight = 32.sp),
                 maxLines = 1, softWrap = false,
             )
+        }
+    }
+}
+
+/** Данные и действия кнопок тайм-аута в нижней панели (только волейбол). */
+private class PanelTimeouts(
+    val label: String,
+    val used1: Int,
+    val used2: Int,
+    val limit: Int,
+    val enabled: Boolean,
+    val onTimeout1: () -> Unit,
+    val onTimeout2: () -> Unit,
+)
+
+/**
+ * Кнопка «ТАЙМ-АУТ» команды: часы, подпись и точки по числу тайм-аутов в партии —
+ * закрашенная точка = тайм-аут ещё остался. Когда лимит исчерпан (или матч не идёт) — приглушена и не нажимается.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun TimeoutButton(
+    text: String,
+    used: Int,
+    limit: Int,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = ScoreKeeperTheme.colors
+    val type = ScoreKeeperTheme.typography
+    val interaction = remember { MutableInteractionSource() }
+    val scale = rememberPressScale(interaction)
+    val available = enabled && used < limit
+    Box(
+        modifier.size(280.dp, 53.dp)
+            .graphicsLayer {
+                scaleX = scale; scaleY = scale
+                alpha = if (available) 1f else 0.45f
+            }
+            .clip(RoundedCornerShape(26.5.dp))
+            .background(colors.pillBg)
+            .border(2.dp, colors.headingBlue, RoundedCornerShape(26.5.dp))
+            .hoverable(interaction).pointerHoverIcon(PointerIcon.Hand)
+            .clickable(
+                interactionSource = interaction, indication = null,
+                enabled = available, onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            TimerIcon(colors.headingBlue)
+            BasicText(
+                text,
+                style = type.teamLabel.copy(fontSize = 22.sp, color = colors.headingBlue),
+                maxLines = 1, softWrap = false,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                repeat(limit) { i ->
+                    val stillAvailable = i < limit - used
+                    Box(
+                        Modifier.size(14.dp).clip(CircleShape).then(
+                            if (stillAvailable) Modifier.background(colors.headingBlue)
+                            else Modifier.border(2.dp, colors.headingBlue.copy(alpha = 0.5f), CircleShape)
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Окно тайм-аута / перерыва на смену сторон: большой обратный отсчёт, полоса прогресса и кнопки.
+ * Esc, Enter и стрелка «назад» завершают таймер (тайм-аут при этом считается взятым);
+ * «Отменить тайм-аут» возвращает его команде — на случай ошибочного нажатия.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun TimerDialogOverlay(
+    title: String,
+    subtitle: String,
+    remainingMillis: Long,
+    totalSeconds: Int,
+    endText: String,
+    onFinish: () -> Unit,
+    cancelText: String?,
+    onCancel: () -> Unit,
+) {
+    val colors = ScoreKeeperTheme.colors
+    val type = ScoreKeeperTheme.typography
+    RegisterHotkeyLayer(onBack = onFinish, onConfirm = onFinish)
+
+    val seconds = timerSeconds(remainingMillis)
+    val fraction = (remainingMillis / (totalSeconds * 1000f)).coerceIn(0f, 1f)
+    val urgent = seconds in 1..5
+    val accent = if (urgent) StatusRed else colors.headingBlue
+
+    MatchDialogScaffold(cardHeight = if (cancelText != null) 610.dp else 548.dp, onBack = onFinish) {
+        FigmaText(
+            title,
+            type.cardTitle.copy(fontSize = 40.sp, lineHeight = 44.sp),
+            colors.overlayHeading,
+            Modifier.offset(0.dp, 36.dp), TextAlign.Center, 794.dp,
+        )
+        Box(
+            Modifier.offset(97.dp, 106.dp).size(600.dp, 44.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            BasicText(
+                subtitle,
+                style = type.teamLabel.copy(color = colors.headingBlue),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        FigmaText(
+            formatTime(seconds),
+            type.cardTitle.copy(fontSize = 150.sp, lineHeight = 160.sp),
+            accent,
+            Modifier.offset(0.dp, 172.dp), TextAlign.Center, 794.dp,
+            gameDigits = true,
+        )
+        Box(
+            Modifier.offset(117.dp, 356.dp).size(560.dp, 14.dp)
+                .clip(RoundedCornerShape(7.dp)).background(colors.pillBg),
+        ) {
+            Box(
+                Modifier.fillMaxHeight().fillMaxWidth(fraction)
+                    .background(if (urgent) StatusRed else Brand.Green),
+            )
+        }
+        GreenActionButton(
+            endText, 440.dp,
+            onClick = onFinish,
+            modifier = Modifier.offset(177.dp, 424.dp),
+        )
+        if (cancelText != null) {
+            val cancelInteraction = remember { MutableInteractionSource() }
+            Box(
+                Modifier.offset(0.dp, 508.dp).size(794.dp, 48.dp)
+                    .hoverable(cancelInteraction).pointerHoverIcon(PointerIcon.Hand)
+                    .clickable(interactionSource = cancelInteraction, indication = null, onClick = onCancel),
+                contentAlignment = Alignment.Center,
+            ) {
+                BasicText(
+                    cancelText,
+                    style = type.caption.copy(fontSize = 22.sp, color = colors.captionText),
+                    maxLines = 1, softWrap = false,
+                )
+            }
         }
     }
 }
@@ -1057,7 +1316,7 @@ private fun ServeCoin(
         contentAlignment = Alignment.Center,
     ) {
         Image(
-            painter = painterResource(if (selected) "coin_gold.png" else "coin_gray.png"),
+            painter = painterResource(if (selected) "coin_gold.svg" else "coin_gray.svg"),
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
         )
@@ -1224,15 +1483,30 @@ private fun NumPillField(
         modifier.size(90.dp, 53.dp).clip(RoundedCornerShape(20.dp)).background(colors.pillBg),
         contentAlignment = Alignment.Center,
     ) {
+        var focused by remember { mutableStateOf(false) }
+        val blink = rememberInfiniteTransition(label = "caret")
+        val caretAlpha by blink.animateFloat(
+            1f, 0f, infiniteRepeatable(tween(530), RepeatMode.Reverse), label = "caretAlpha",
+        )
+        // Настоящий текст поля невидим (и каретка тоже): цифры рисует GameDigitsText в слотах
+        // одинаковой ширины и на общей базе — как в окне очков, чтобы ничего не съезжало.
         BasicTextField(
             value = value,
             onValueChange = { v -> onValueChange(v.filter { it.isDigit() }.take(3)) },
             singleLine = true,
-            textStyle = type.scoreDigits.copy(
-                color = colors.pillText, textAlign = TextAlign.Center,
-            ),
-            cursorBrush = SolidColor(colors.pillText),
-            modifier = Modifier.fillMaxWidth().offset(y = 2.dp).padding(horizontal = 6.dp).trackTyping(),
+            textStyle = type.scoreDigits.copy(color = Color.Transparent, textAlign = TextAlign.Center),
+            cursorBrush = SolidColor(Color.Transparent),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp)
+                .onFocusChanged { focused = it.isFocused }.trackTyping(),
+            decorationBox = { inner ->
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    GameDigitsText(
+                        value, type.scoreDigits, colors.pillText,
+                        caretAtEnd = focused && caretAlpha > 0.5f,
+                    )
+                    Box(Modifier.matchParentSize().graphicsLayer { alpha = 0f }) { inner() }
+                }
+            },
         )
     }
 }
@@ -1841,19 +2115,30 @@ private fun CorrectionDialogOverlay(
     name1: String,
     name2: String,
     courtSide: String,
+    isTennis: Boolean,
     usePathText: Boolean,
     onCourtSideChange: (String) -> Unit,
     onBack: () -> Unit,
-    onSubmit: (score1: Int, score2: Int, sets1: Int, sets2: Int, server: Int) -> Unit,
+    onSubmit: (score1: Int, score2: Int, sets1: Int, sets2: Int, server: Int, tennis: TennisCorrection) -> Unit,
 ) {
     val colors = ScoreKeeperTheme.colors
     val type = ScoreKeeperTheme.typography
     val strings = ScoreKeeperTheme.strings
+    // Теннис: очки текущего гейма, геймы текущего сета и выигранные сеты. Волейбол: очки и партии.
+    val scoreLabel = if (isTennis) strings.gamesLabel else strings.pointsTab
+    val setsFieldLabel = if (isTennis) strings.tennisSetsLabel else strings.setsLabel
     var t1Score by remember { mutableStateOf(match.score1.toString()) }
     var t2Score by remember { mutableStateOf(match.score2.toString()) }
     var t1Sets by remember { mutableStateOf(match.sets1.toString()) }
     var t2Sets by remember { mutableStateOf(match.sets2.toString()) }
     var serverSel by remember { mutableStateOf(match.server) }
+    // Теннис: очки текущего гейма (сырые: 0,1,2,3… — на экране показываются как 0/15/30/40/AD) и автосмена подачи.
+    var p1 by remember { mutableStateOf(match.tennisPoints?.getOrNull(0) ?: 0) }
+    var p2 by remember { mutableStateOf(match.tennisPoints?.getOrNull(1) ?: 0) }
+    var autoServe by remember { mutableStateOf(match.autoServe) }
+    // Тай-брейк идёт, когда в сете 6:6 — в нём очки показываются обычными числами.
+    val inTiebreak = isTennis && t1Score.toIntOrNull() == 6 && t2Score.toIntOrNull() == 6
+    val pointsShown = tennisPointsLabels(p1, p2, inTiebreak)
     // Keep side edits local until Done is confirmed; backing out must leave the match unchanged.
     var selectedCourtSide by remember(courtSide) { mutableStateOf(courtSide) }
     val submit: () -> Unit = {
@@ -1864,11 +2149,14 @@ private fun CorrectionDialogOverlay(
             t1Sets.toIntOrNull() ?: 0,
             t2Sets.toIntOrNull() ?: 0,
             serverSel,
+            TennisCorrection(p1, p2, autoServe),
         )
     }
     RegisterHotkeyLayer(onBack = onBack, onConfirm = submit)
 
-    MatchDialogScaffold(cardHeight = 598.dp, onBack = onBack) {
+    // В теннисе в окне три строки (очки, геймы, сеты) и переключатель автосмены подачи — карточка выше.
+    val extra = if (isTennis) 70.dp else 0.dp
+    MatchDialogScaffold(cardHeight = 598.dp + extra, onBack = onBack) {
         FigmaText(
             strings.correction, type.cardTitle, colors.overlayHeading,
             Modifier.offset(0.dp, 20.dp), TextAlign.Center, 794.dp,
@@ -1897,24 +2185,47 @@ private fun CorrectionDialogOverlay(
 
         Box(Modifier.offset(391.dp, 79.dp).size(4.dp, 310.dp).background(colors.divider, RoundedCornerShape(2.dp)))
 
-        // очки и партии
         val labelStyle = type.teamLabel.copy(fontSize = 28.sp, color = colors.captionText)
-        Box(Modifier.offset(74.dp, 154.dp).size(170.dp, 53.dp), contentAlignment = Alignment.CenterStart) {
-            BasicText(strings.pointsTab, style = labelStyle, maxLines = 1, softWrap = false)
+        // Строки значений: волейбол — очки и партии; теннис — очки гейма, геймы, сеты.
+        val rowGames = if (isTennis) 222.dp else 154.dp
+        val rowSets = if (isTennis) 296.dp else 260.dp
+        for (x in listOf(74.dp, 445.dp)) {
+            Box(Modifier.offset(x, rowGames).size(170.dp, 53.dp), contentAlignment = Alignment.CenterStart) {
+                BasicText(scoreLabel, style = labelStyle, maxLines = 1, softWrap = false)
+            }
+            Box(Modifier.offset(x, rowSets).size(170.dp, 53.dp), contentAlignment = Alignment.CenterStart) {
+                BasicText(setsFieldLabel, style = labelStyle, maxLines = 1, softWrap = false)
+            }
         }
-        Box(Modifier.offset(445.dp, 154.dp).size(170.dp, 53.dp), contentAlignment = Alignment.CenterStart) {
-            BasicText(strings.pointsTab, style = labelStyle, maxLines = 1, softWrap = false)
+        NumPillField(t1Score, { t1Score = it }, Modifier.offset(257.dp, rowGames))
+        NumPillField(t2Score, { t2Score = it }, Modifier.offset(628.dp, rowGames))
+        NumPillField(t1Sets, { t1Sets = it }, Modifier.offset(257.dp, rowSets))
+        NumPillField(t2Sets, { t2Sets = it }, Modifier.offset(628.dp, rowSets))
+
+        if (isTennis) {
+            // Очки текущего гейма: кнопки «−» / «+» меняют их по ходу 0 → 15 → 30 → 40 → AD (в тай-брейке — по одному).
+            for (x in listOf(74.dp, 445.dp)) {
+                Box(Modifier.offset(x, 148.dp).size(170.dp, 53.dp), contentAlignment = Alignment.CenterStart) {
+                    BasicText(strings.pointsTab, style = labelStyle, maxLines = 1, softWrap = false)
+                }
+            }
+            PointsStepper(
+                display = pointsShown[0],
+                canDec = p1 > 0,
+                canInc = canAddTennisPoint(p1, p2, inTiebreak),
+                onDec = { p1 = (p1 - 1).coerceAtLeast(0) },
+                onInc = { p1 += 1 },
+                modifier = Modifier.offset(197.dp, 148.dp),
+            )
+            PointsStepper(
+                display = pointsShown[1],
+                canDec = p2 > 0,
+                canInc = canAddTennisPoint(p2, p1, inTiebreak),
+                onDec = { p2 = (p2 - 1).coerceAtLeast(0) },
+                onInc = { p2 += 1 },
+                modifier = Modifier.offset(568.dp, 148.dp),
+            )
         }
-        Box(Modifier.offset(74.dp, 260.dp).size(170.dp, 53.dp), contentAlignment = Alignment.CenterStart) {
-            BasicText(strings.setsLabel, style = labelStyle, maxLines = 1, softWrap = false)
-        }
-        Box(Modifier.offset(445.dp, 260.dp).size(170.dp, 53.dp), contentAlignment = Alignment.CenterStart) {
-            BasicText(strings.setsLabel, style = labelStyle, maxLines = 1, softWrap = false)
-        }
-        NumPillField(t1Score, { t1Score = it }, Modifier.offset(257.dp, 154.dp))
-        NumPillField(t2Score, { t2Score = it }, Modifier.offset(628.dp, 154.dp))
-        NumPillField(t1Sets, { t1Sets = it }, Modifier.offset(257.dp, 260.dp))
-        NumPillField(t2Sets, { t2Sets = it }, Modifier.offset(628.dp, 260.dp))
 
         // сторона поля подающей команды
         FigmaText(
@@ -1939,12 +2250,114 @@ private fun CorrectionDialogOverlay(
             modifier = Modifier.offset(422.dp, 446.dp),
         )
 
+        if (isTennis) {
+            // Автосмена подачи: после каждого гейма (и по правилам тай-брейка) подающий меняется сам.
+            AutoServeToggle(
+                checked = autoServe,
+                label = strings.autoServe,
+                onToggle = { autoServe = !autoServe },
+                modifier = Modifier.offset(0.dp, 516.dp).width(794.dp),
+            )
+        }
+
         DoneButton(
             text = strings.done,
             usePathText = usePathText,
             onClick = submit,
-            modifier = Modifier.offset(308.dp, 524.dp),
+            modifier = Modifier.offset(308.dp, 524.dp + extra),
         )
+    }
+}
+
+/** Что окно корректировки меняет только в теннисе: очки текущего гейма и автосмену подачи. */
+private class TennisCorrection(val points1: Int, val points2: Int, val autoServe: Boolean)
+
+/** Очки гейма на экране: 0 / 15 / 30 / 40 / AD; в тай-брейке — обычные числа. Правила те же, что в бэкенде. */
+private fun tennisPointsLabels(p1: Int, p2: Int, tiebreak: Boolean): List<String> {
+    if (tiebreak) return listOf("$p1", "$p2")
+    val labels = listOf("0", "15", "30", "40")
+    if (p1 < 3 || p2 < 3) return listOf(labels[minOf(p1, 3)], labels[minOf(p2, 3)])
+    return when {
+        p1 == p2 -> listOf("40", "40")
+        p1 > p2 -> listOf("AD", "40")
+        else -> listOf("40", "AD")
+    }
+}
+
+/** Можно ли добавить очко игроку: поправка счёта не должна «выигрывать» гейм (для этого есть кнопка +1). */
+private fun canAddTennisPoint(mine: Int, other: Int, tiebreak: Boolean): Boolean {
+    val next = mine + 1
+    val wouldWin = if (tiebreak) next >= 7 && next - other >= 2 else next >= 4 && next - other >= 2
+    return !wouldWin && next <= 99
+}
+
+/** Поле очков гейма в корректировке: «−», крупное значение (15 / 40 / AD …), «+». */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun PointsStepper(
+    display: String,
+    canDec: Boolean,
+    canInc: Boolean,
+    onDec: () -> Unit,
+    onInc: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = ScoreKeeperTheme.colors
+    val type = ScoreKeeperTheme.typography
+    @Composable
+    fun StepButton(symbol: String, enabled: Boolean, onClick: () -> Unit) {
+        val interaction = remember { MutableInteractionSource() }
+        Box(
+            Modifier.size(40.dp)
+                .graphicsLayer { alpha = if (enabled) 1f else 0.35f }
+                .clip(CircleShape)
+                .background(colors.headingBlue.copy(alpha = 0.2f))
+                .hoverable(interaction).pointerHoverIcon(PointerIcon.Hand)
+                .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            BasicText(symbol, style = type.scoreDigits.copy(fontSize = 26.sp, color = colors.pillText), maxLines = 1, softWrap = false)
+        }
+    }
+    Row(
+        modifier.size(150.dp, 53.dp).clip(RoundedCornerShape(20.dp)).background(colors.pillBg).padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        StepButton("-", canDec, onDec)
+        // Цифры очков по правилу игр: «0» — Blue Curve Bold, остальные — Aqum Two.
+        GameDigitsText(display, type.scoreDigits, colors.pillText)
+        StepButton("+", canInc, onInc)
+    }
+}
+
+/** Переключатель «Автосмена подачи»: пилюля-тумблер и подпись по центру карточки. */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun AutoServeToggle(
+    checked: Boolean,
+    label: String,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = ScoreKeeperTheme.colors
+    val type = ScoreKeeperTheme.typography
+    val interaction = remember { MutableInteractionSource() }
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Row(
+            Modifier
+                .hoverable(interaction).pointerHoverIcon(PointerIcon.Hand)
+                .clickable(interactionSource = interaction, indication = null, onClick = onToggle),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            FeatureSwitch(checked = checked, onToggle = onToggle)
+            BasicText(
+                label,
+                style = type.teamLabel.copy(fontSize = 24.sp, color = colors.overlayHeading),
+                maxLines = 1, softWrap = false,
+            )
+        }
     }
 }
 
@@ -2032,6 +2445,17 @@ private fun DrawScope.plainText(
     color: Color,
     x: Float,
     baseline: Float,
+) = plainText(measurer, AnnotatedString(text), style, color, x, baseline)
+
+/** То же для текста с разметкой (например, цифры в шрифтах по правилу игр). */
+@OptIn(ExperimentalTextApi::class)
+private fun DrawScope.plainText(
+    measurer: TextMeasurer,
+    text: AnnotatedString,
+    style: TextStyle,
+    color: Color,
+    x: Float,
+    baseline: Float,
 ) {
     val u = density
     val layout = measurer.measure(text, style)
@@ -2092,7 +2516,7 @@ private fun ScoreTopBar(
         Canvas(Modifier.fillMaxSize()) {
             val u = density
             withTransform({ scale(u, u, Offset.Zero) }) { drawPath(timerPath, colors.barFg) }
-            plainText(measurer, timeText, digits24, colors.barFg, 211.5f, 35f)
+            plainText(measurer, gameNumbers(timeText), digits24, colors.barFg, 211.5f, 35f)
         }
 
         // пилюля «ХОТКЕИ [H]»
@@ -2449,6 +2873,10 @@ fun VoleyballScreen(
 
     val apply: (ScoreResponse?) -> Unit = { r -> if (r != null) onMatchUpdate(MatchState.fromResponse(r)) }
 
+    // Тайм-аут (волейбол) / перерыв на смену сторон (теннис): окно показываем, пока таймер не истёк.
+    val timerMillis = rememberTimerRemainingMillis(match.timer)
+    val activeTimer = match.timer?.takeIf { timerMillis > 0L }
+
     val startMatchAction = { showTossDialog = true }
     val endMatchAction = { ApiClient.forceEnd(onResult = apply, onError = { errorMsg = it }) }
     // Reopen the finished match by changing only its status. Keep the current set/game,
@@ -2508,6 +2936,7 @@ fun VoleyballScreen(
                     server = match.server,
                     status = match.status,
                     winner = null,
+                    timeouts = listOf(0, 0),
                 ),
                 onResult = apply,
                 onError = { errorMsg = it },
@@ -2515,6 +2944,11 @@ fun VoleyballScreen(
         }
     }
     val undoAction: () -> Unit = { ApiClient.removePoint(apply) { errorMsg = it } }
+    val timeoutAction: (Int) -> Unit = { team -> ApiClient.callTimeout(team, apply) { errorMsg = it } }
+    // «Завершить»: таймер останавливается, тайм-аут считается взятым.
+    val endTimerAction: () -> Unit = { ApiClient.cancelTimer(false, apply) { errorMsg = it } }
+    // «Отменить тайм-аут»: ошибочное нажатие — тайм-аут возвращается команде.
+    val cancelTimeoutAction: () -> Unit = { ApiClient.cancelTimer(true, apply) { errorMsg = it } }
     val correctionAction: () -> Unit = { showCorrectionDialog = true }
     // При выходе сразу скрываем сообщение на табло: локально и пустой рассылкой по WS.
     // Сбрасываем матч на сервере (/reset), затем уходим на главный экран.
@@ -2590,32 +3024,43 @@ fun VoleyballScreen(
             Box(Modifier.align(Alignment.Center).requiredSize(1920.dp, 1080.dp)) {
 
                 // ── Предпросмотр табло зрителей ──
-                // Табло как в макете: рамка 1115×684 в точке (68, 85), пространство табло
-                // 1129×698 (обводка 14 по центру контура рамки) — в масштабе 1:1, без панели-обёртки.
+                // Экран внутри рамки — тот же ScoreboardViewport, что и окно на ТВ, в пропорциях 16:9:
+                // содержимое масштабируется равномерно (ничего не растянуто), фон заполняет весь экран.
+                // Рамка-обводка (в тёмной теме жёлтая) — оформление админки, на ТВ её нет.
                 Box(
-                    Modifier.offset(61.dp, 78.dp).size(1129.dp, 698.dp)
+                    Modifier.offset(61.dp, 103.dp).size(1129.dp, 647.dp)
                         .drawBehind {
                             drawBlurredRoundRect(
-                                topLeft = Offset(7.dp.toPx(), 7.dp.toPx()),
-                                size = Size(1115.dp.toPx(), 684.dp.toPx()),
-                                corner = 40.dp.toPx(),
+                                topLeft = Offset.Zero,
+                                size = size,
+                                corner = 30.dp.toPx(),
                                 color = colors.frameGlow.copy(alpha = if (darkTheme) 0.38f else 0.55f),
                                 sigma = 28.dp.toPx(),
                             )
-                        },
+                        }
+                        .clip(RoundedCornerShape(30.dp))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(colors.frameStart, colors.frameEnd),
+                                start = Offset(Float.POSITIVE_INFINITY, 0f),
+                                end = Offset(0f, Float.POSITIVE_INFINITY),
+                            )
+                        )
+                        .padding(14.dp)
+                        .clip(RoundedCornerShape(18.dp)),
                 ) {
-                    AudienceScreen(
-                        match = match,
-                        logo1 = logo1,
-                        logo2 = logo2,
-                        tickerText = tickerText,
-                        courtSide = courtSide,
-                        strings = strings,
-                        preview = true,
-                        frameStart = colors.frameStart,
-                        frameEnd = colors.frameEnd,
-                        onDisplayText = { showTextDialog = true },
-                    )
+                    ScoreboardViewport(Modifier.fillMaxSize()) {
+                        AudienceScreen(
+                            match = match,
+                            logo1 = logo1,
+                            logo2 = logo2,
+                            tickerText = tickerText,
+                            courtSide = courtSide,
+                            strings = strings,
+                            preview = true,
+                            onDisplayText = { showTextDialog = true },
+                        )
+                    }
                 }
 
                 // ── Нижняя левая карточка: партии и подача (геометрия — по присланному SVG) ──
@@ -2628,8 +3073,18 @@ fun VoleyballScreen(
                     sets2 = match.sets2,
                     server = match.server,
                     showServe = match.status != "NOT_STARTED",
-                    tabText = "${strings.setTab} ${match.currentSet}",
+                    tabText = "${if (isTennis) strings.tennisSetTab else strings.setTab} ${match.currentSet}",
                     modifier = Modifier.offset(81.dp, 812.dp),
+                    setScores = if (isTennis) match.setScores else emptyList(),
+                    timeouts = if (isTennis) null else PanelTimeouts(
+                        label = strings.timeoutBtn,
+                        used1 = match.timeoutsUsed.getOrElse(0) { 0 },
+                        used2 = match.timeoutsUsed.getOrElse(1) { 0 },
+                        limit = match.timeoutsPerSet,
+                        enabled = match.status == "IN_PROGRESS",
+                        onTimeout1 = { timeoutAction(0) },
+                        onTimeout2 = { timeoutAction(1) },
+                    ),
                 )
 
                 // ── Верхняя панель: хоткеи, таймер (не кликабелен), настройки, назад ──
@@ -2648,7 +3103,7 @@ fun VoleyballScreen(
                     TennisBallIcon(Modifier.offset(1273.dp, 156.dp).size(112.dp))
                 } else {
                     Image(
-                        painter = painterResource("volleyball_icon.png"),
+                        painter = painterResource("volleyball_icon.svg"),
                         contentDescription = null,
                         modifier = Modifier.offset(1276.dp, 159.dp).size(106.dp),
                     )
@@ -2707,13 +3162,17 @@ fun VoleyballScreen(
                         )
                     }
                     Box(Modifier.offset(31.dp, 143.dp).size(537.dp, 2.dp).background(colors.divider))
-                    match.tennisPointsDisplay?.let { pts ->
+                    if (isTennis) {
+                        // В теннисе в карточке — очки гейма, а счёт по геймам стоит на разделителе.
                         Box(
                             Modifier.offset(0.dp, 128.dp).fillMaxWidth(),
                             contentAlignment = Alignment.Center,
                         ) {
                             BasicText(
-                                "${pts.getOrElse(0) { "" }} : ${pts.getOrElse(1) { "" }}",
+                                gameNumbers(
+                                    "${strings.gamesLabel} ${match.score1} : ${match.score2}" +
+                                        if (match.tiebreak) " · ${strings.tiebreakLabel}" else "",
+                                ),
                                 style = type.teamLabel.copy(fontSize = 26.sp, color = colors.headingBlue),
                                 modifier = Modifier.background(colors.cardSurface)
                                     .padding(horizontal = 16.dp),
@@ -2721,8 +3180,10 @@ fun VoleyballScreen(
                             )
                         }
                     }
-                    ScorePill("%02d".format(match.score1), Modifier.offset(476.dp, 41.dp))
-                    ScorePill("%02d".format(match.score2), Modifier.offset(476.dp, 183.dp))
+                    val mainScore1 = if (isTennis) match.tennisPointsDisplay?.getOrNull(0) ?: "0" else "%02d".format(match.score1)
+                    val mainScore2 = if (isTennis) match.tennisPointsDisplay?.getOrNull(1) ?: "0" else "%02d".format(match.score2)
+                    ScorePill(mainScore1, Modifier.offset(476.dp, 41.dp))
+                    ScorePill(mainScore2, Modifier.offset(476.dp, 183.dp))
                     Box(
                         Modifier.offset(189.dp, 273.dp).size(218.dp, 52.dp)
                             .clip(RoundedCornerShape(26.dp)).background(colors.pillBg),
@@ -2840,19 +3301,21 @@ fun VoleyballScreen(
                     name1 = displayName1,
                     name2 = displayName2,
                     courtSide = courtSide,
+                    isTennis = isTennis,
                     usePathText = language == AppLanguage.RU,
                     onCourtSideChange = onCourtSideChange,
                     onBack = { showCorrectionDialog = false },
-                    onSubmit = { s1, s2, sets1, sets2, server ->
+                    onSubmit = { s1, s2, sets1, sets2, server, tennis ->
                         if (isTennis) {
                             ApiClient.setScore(
                                 TennisSetScore(
-                                    points = listOf(0, 0),
+                                    points = listOf(tennis.points1, tennis.points2),
                                     games = listOf(s1, s2),
                                     setsWon = listOf(sets1, sets2),
                                     server = server,
                                     status = match.status,
                                     winner = match.winner,
+                                    autoServe = tennis.autoServe,
                                 ),
                                 onResult = apply,
                                 onError = { errorMsg = it },
@@ -2882,6 +3345,23 @@ fun VoleyballScreen(
                     onConfirm = { showCloseWarning = false; doBack() },
                 )
             }
+
+            activeTimer?.let { timer ->
+                TimerDialogOverlay(
+                    title = if (timer.isChangeover) strings.changeoverTitle else strings.timeoutTitle,
+                    subtitle = when {
+                        timer.isChangeover -> strings.changeoverHint
+                        timer.team == 1 -> displayName2
+                        else -> displayName1
+                    },
+                    remainingMillis = timerMillis,
+                    totalSeconds = timer.durationSec,
+                    endText = if (timer.isChangeover) strings.skipBreak else strings.endTimeout,
+                    onFinish = endTimerAction,
+                    cancelText = if (timer.isChangeover) null else strings.cancelTimeout,
+                    onCancel = cancelTimeoutAction,
+                )
+            }
         }
     }
 }
@@ -2908,6 +3388,7 @@ private fun BoardText(
         Modifier.offset((centerX - width / 2).dp, (centerY - h / 2).dp).size(width.dp, h.dp),
         contentAlignment = Alignment.Center,
     ) {
+        // Табло (предпросмотр и ТВ) рисуется шрифтом Arial целиком — правило шрифтов цифр сюда не применяется.
         Text(
             text,
             color = color,
@@ -2923,6 +3404,33 @@ private fun BoardText(
     }
 }
 
+/** Точки тайм-аутов под колонкой команды на табло: светлая — тайм-аут ещё остался, тусклая — уже взят. */
+@Composable
+private fun BoardTimeouts(centerX: Float, used: Int, limit: Int, label: String) {
+    Row(
+        Modifier.offset((centerX - 130f).dp, 636.dp).size(260.dp, 30.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            color = Color.White.copy(alpha = 0.85f),
+            fontFamily = ArialFamily,
+            fontSize = 20.sp,
+            lineHeight = 20.sp,
+            maxLines = 1,
+            softWrap = false,
+        )
+        Spacer(Modifier.width(12.dp))
+        repeat(limit) { i ->
+            Box(
+                Modifier.padding(horizontal = 4.dp).size(16.dp).clip(CircleShape)
+                    .background(if (i < limit - used) Color(0xFFFFBF00) else Color.White.copy(alpha = 0.25f)),
+            )
+        }
+    }
+}
+
 @Composable
 fun AudienceScreen(
     match: MatchState,
@@ -2933,8 +3441,6 @@ fun AudienceScreen(
     courtSide: String = "L",
     strings: AppStrings = RuStrings,
     preview: Boolean = false,
-    frameStart: Color = Color(0xFFCFE6F5),
-    frameEnd: Color = Color(0xFF81B6D6),
     onDisplayText: () -> Unit = {}
 ) {
     var live by remember { mutableStateOf(match) }
@@ -2958,7 +3464,10 @@ fun AudienceScreen(
     DisposableEffect(Unit) {
         // Подписка у каждого табло своя (предпросмотр + ТВ), общее соединение закрывается по последнему.
         val unsubscribe = ApiClient.subscribeWs(
-            onScore = { r -> live = MatchState.fromResponse(r) },
+            onScore = { r ->
+                val incoming = MatchState.fromResponse(r)
+                if (incoming.revision >= live.revision) live = incoming
+            },
             onText = { t -> shownText = t; textNonce++ },
         )
         onDispose { unsubscribe() }
@@ -2967,91 +3476,50 @@ fun AudienceScreen(
     val panelLeft = remember { PathParser().parsePathString(PANEL_LEFT).toPath() }
     val panelRight = remember { PathParser().parsePathString(PANEL_RIGHT).toPath() }
 
-    // In the admin preview, a right-side serving team appears on the opposite side of
-    // the audience board. The real external display keeps its normal team ordering.
-    val swapPreviewSides = preview && courtSide == "R"
-    val leftTeam = if (swapPreviewSides) live.team2 else live.team1
-    val rightTeam = if (swapPreviewSides) live.team1 else live.team2
-    val leftSets = if (swapPreviewSides) live.sets2 else live.sets1
-    val rightSets = if (swapPreviewSides) live.sets1 else live.sets2
-    val leftScore = if (swapPreviewSides) live.score2 else live.score1
-    val rightScore = if (swapPreviewSides) live.score1 else live.score2
-    val leftLogo = if (swapPreviewSides) logo2 else logo1
-    val rightLogo = if (swapPreviewSides) logo1 else logo2
-    val visibleServer = if (swapPreviewSides) 1 - live.server else live.server
+    val isTennis = live.sport == "tennis"
+    // Расположение команд на площадке («1 | 2» / «2 | 1» из окна корректировки) применяется ОДИНАКОВО
+    // в предпросмотре и на ТВ — раньше предпросмотр менял колонки местами, а ТВ нет.
+    val swapSides = courtSide == "R"
+    val leftIdx = if (swapSides) 1 else 0
+    val rightIdx = 1 - leftIdx
+    val teams = listOf(live.team1, live.team2)
+    val logos = listOf(logo1, logo2)
+    // Волейбол: в рамке — выигранные партии, крупно — очки партии.
+    // Теннис: в рамке — геймы текущего сета, крупно — очки гейма (0 / 15 / 30 / 40 / AD).
+    val boxValues = if (isTennis) listOf(live.score1, live.score2) else listOf(live.sets1, live.sets2)
+    val bigValues: List<String> =
+        if (isTennis) live.tennisPointsDisplay ?: listOf("0", "0") else listOf("${live.score1}", "${live.score2}")
+    val boxLabel = if (isTennis) strings.gamesLabel else strings.setsLabel
+    // В тай-брейке крупные цифры — очки тай-брейка, это подписано вместо «ОЧКИ».
+    val pointsCaption = if (isTennis && live.tiebreak) strings.tiebreakLabel else strings.pointsTab
+    val leftLogo = logos[leftIdx]
+    val rightLogo = logos[rightIdx]
+    val visibleServer = if (swapSides) 1 - live.server else live.server
+
+    // Тайм-аут / перерыв на смену сторон: у предпросмотра и ТВ свой отсчёт от одного и того же момента.
+    val timerMillis = rememberTimerRemainingMillis(live.timer)
+    val timerSecs = timerSeconds(timerMillis)
 
     Box(modifier = modifier.size(width = 1129.dp, height = 698.dp)) {
         Canvas(Modifier.fillMaxSize()) {
             val u = 1.dp.toPx()
             withTransform({ scale(u, u, Offset.Zero) }) {
-                val frame = Path().apply {
-                    addRoundRect(RoundRect(7f, 7f, 1122f, 691f, CornerRadius(40f, 40f)))
+                // Фон (диагонали) рисует ScoreboardViewport на всю область экрана — здесь только содержимое.
+                // матовые панели команд (белый 10%, без контура — как в Figma)
+                withTransform({ translate(-222.7f, -222.7f) }) {
+                    drawPath(panelLeft, Color.White.copy(alpha = 0.10f))
+                    drawPath(panelRight, Color.White.copy(alpha = 0.10f))
                 }
-                drawPath(frame, Color(0xFF070F2B))
-                clipPath(frame) {
-                    // тёмно-синяя диагональная полоса (в SVG — с прозрачностью 0.6)
-                    val navy = Path().apply {
-                        moveTo(7f, 691f); lineTo(743.3f, 7f); lineTo(1122f, 7f); lineTo(1122f, 212.2f); close()
-                    }
-                    drawPath(
-                        navy,
-                        Brush.verticalGradient(listOf(Color(0xFF2A5298), Color(0xFF1E3C72)), startY = 7f, endY = 691f),
-                        alpha = 0.6f,
-                    )
-                    // красная диагональ (в SVG — с прозрачностью 0.9)
-                    val red = Path().apply {
-                        moveTo(7f, 691f); lineTo(1122f, 100f); lineTo(1122f, 691f); close()
-                    }
-                    drawPath(
-                        red,
-                        Brush.horizontalGradient(listOf(Color(0xFFBA0C24), Color(0xFFF21B3F)), startX = 7f, endX = 1122f),
-                        alpha = 0.9f,
-                    )
-                    // матовые панели команд (белый 10%, без контура — как в Figma)
-                    withTransform({ translate(-222.7f, -222.7f) }) {
-                        drawPath(panelLeft, Color.White.copy(alpha = 0.10f))
-                        drawPath(panelRight, Color.White.copy(alpha = 0.10f))
-                    }
-                    // плашки партий и пилюля «ПАРТИЯ N» (белый 10%)
-                    drawRoundRect(Color.White.copy(alpha = 0.10f), Offset(228f, 332f), Size(200f, 102f), CornerRadius(17f, 17f))
-                    drawRoundRect(Color.White.copy(alpha = 0.10f), Offset(702f, 332f), Size(200f, 102f), CornerRadius(17f, 17f))
-                    drawRoundRect(Color.White.copy(alpha = 0.10f), Offset(459f, 542f), Size(211f, 116f), CornerRadius(19f, 19f))
-                    // диски логотипов команд
-                    drawCircle(Color(0xFFD9D9D9), 75f, Offset(328f, 198f))
-                    drawCircle(Color(0xFFD9D9D9), 75f, Offset(802f, 198f))
-                    // точки-двоеточие между партиями
-                    drawCircle(Color.White, 15f, Offset(565f, 285f))
-                    drawCircle(Color.White, 15f, Offset(565f, 350f))
-                    // The side-direction badge is part of the actual audience board, not its preview.
-                    if (!preview) {
-                        val bc = Offset(564f, 462f)
-                        val swapped = courtSide == "R"
-                        drawCircle(Color(0xFF848484), 37f, bc)
-                        drawArc(
-                            if (swapped) Color(0xFF18305F) else Color(0xFFC31332),
-                            startAngle = 90f, sweepAngle = 180f, useCenter = true,
-                            topLeft = Offset(bc.x - 32.3f, bc.y - 32.3f), size = Size(64.6f, 64.6f),
-                        )
-                        drawArc(
-                            if (swapped) Color(0xFFC31332) else Color(0xFF18305F),
-                            startAngle = -90f, sweepAngle = 180f, useCenter = true,
-                            topLeft = Offset(bc.x - 32.3f, bc.y - 32.3f), size = Size(64.6f, 64.6f),
-                        )
-                        drawLine(Color.White, Offset(564f, 436f), Offset(564f, 486f), strokeWidth = 2f)
-                        drawCircle(Color(0xFF070F2B), 36f, bc, style = Stroke(2f))
-                    }
-                }
-                // рамка: градиентная обводка 14
-                drawRoundRect(
-                    brush = Brush.linearGradient(
-                        listOf(frameStart, frameEnd),
-                        start = Offset(1122f, 7f), end = Offset(7f, 691f),
-                    ),
-                    topLeft = Offset(7f, 7f),
-                    size = Size(1115f, 684f),
-                    cornerRadius = CornerRadius(40f, 40f),
-                    style = Stroke(14f),
-                )
+                // плашки партий и пилюля «ПАРТИЯ N» (белый 10%)
+                drawRoundRect(Color.White.copy(alpha = 0.10f), Offset(228f, 332f), Size(200f, 102f), CornerRadius(17f, 17f))
+                drawRoundRect(Color.White.copy(alpha = 0.10f), Offset(702f, 332f), Size(200f, 102f), CornerRadius(17f, 17f))
+                drawRoundRect(Color.White.copy(alpha = 0.10f), Offset(459f, 542f), Size(211f, 116f), CornerRadius(19f, 19f))
+                // диски логотипов команд
+                drawCircle(Color(0xFFD9D9D9), 75f, Offset(328f, 198f))
+                drawCircle(Color(0xFFD9D9D9), 75f, Offset(802f, 198f))
+                // точки-двоеточие между партиями
+                drawCircle(Color.White, 15f, Offset(565f, 285f))
+                drawCircle(Color.White, 15f, Offset(565f, 350f))
             }
         }
 
@@ -3094,43 +3562,83 @@ fun AudienceScreen(
             )
         }
 
-        // Team and score columns are swapped only in the admin preview when the serving
-        // team is assigned to the right-hand side.
-        BoardText(leftTeam.uppercase(), 328f, 298f, 35.sp, FontWeight.Normal)
-        BoardText("$leftSets", 328f, 370f, 62.sp, FontWeight.Bold)
-        BoardText(strings.setsLabel, 328f, 419f, 22.sp, FontWeight.Normal)
-        BoardText("$leftScore", 328f, 506f, 124.sp, FontWeight.Bold)
-        BoardText(strings.pointsTab, 328f, 591f, 36.sp, FontWeight.Normal)
+        // Колонки команд: левая / правая с учётом расположения на площадке.
+        BoardText(teams[leftIdx].uppercase(), 328f, 298f, 35.sp, FontWeight.Normal)
+        BoardText("${boxValues[leftIdx]}", 328f, 370f, 62.sp, FontWeight.Bold)
+        BoardText(boxLabel, 328f, 419f, 22.sp, FontWeight.Normal)
+        BoardText(bigValues.getOrElse(leftIdx) { "0" }, 328f, 506f, 124.sp, FontWeight.Bold)
+        BoardText(pointsCaption, 328f, 591f, 36.sp, FontWeight.Normal)
 
-        BoardText(rightTeam.uppercase(), 802f, 298f, 35.sp, FontWeight.Normal)
-        BoardText("$rightSets", 802f, 370f, 62.sp, FontWeight.Bold)
-        BoardText(strings.setsLabel, 802f, 419f, 22.sp, FontWeight.Normal)
-        BoardText("$rightScore", 802f, 506f, 124.sp, FontWeight.Bold)
-        BoardText(strings.pointsTab, 802f, 591f, 36.sp, FontWeight.Normal)
+        BoardText(teams[rightIdx].uppercase(), 802f, 298f, 35.sp, FontWeight.Normal)
+        BoardText("${boxValues[rightIdx]}", 802f, 370f, 62.sp, FontWeight.Bold)
+        BoardText(boxLabel, 802f, 419f, 22.sp, FontWeight.Normal)
+        BoardText(bigValues.getOrElse(rightIdx) { "0" }, 802f, 506f, 124.sp, FontWeight.Bold)
+        BoardText(pointsCaption, 802f, 591f, 36.sp, FontWeight.Normal)
 
-        // The side-direction badge is hidden in the admin preview.
-        BoardText("${strings.setTab} ${live.currentSet}", 564f, 600f, 35.sp, FontWeight.Normal, width = 211f)
-        if (!preview) {
-            BoardText(if (courtSide == "R") "R" else "L", 549.5f, 462f, 35.sp, FontWeight.Bold, width = 34f)
-            BoardText(if (courtSide == "R") "L" else "R", 579.5f, 462f, 35.sp, FontWeight.Bold, width = 34f)
+        // Центральная пилюля: волейбол — «ПАРТИЯ N»; теннис — «СЕТ N» и счёт по сетам.
+        if (isTennis) {
+            val leftSetsWon = if (swapSides) live.sets2 else live.sets1
+            val rightSetsWon = if (swapSides) live.sets1 else live.sets2
+            BoardText("${strings.tennisSetTab} ${live.currentSet}", 564f, 576f, 35.sp, FontWeight.Normal, width = 211f)
+            // Завершённые сеты по порядку («6:3  4:6», слева — левая команда); пока их нет — счёт по сетам.
+            val setsLine = if (live.setScores.isEmpty()) {
+                "${strings.tennisSetsLabel} $leftSetsWon : $rightSetsWon"
+            } else {
+                live.setScores.joinToString("  ") { sc ->
+                    val a = sc.getOrElse(0) { 0 }
+                    val b = sc.getOrElse(1) { 0 }
+                    if (swapSides) "$b:$a" else "$a:$b"
+                }
+            }
+            BoardText(setsLine, 564f, 626f, 24.sp, FontWeight.Normal, width = 211f)
+        } else {
+            BoardText("${strings.setTab} ${live.currentSet}", 564f, 600f, 35.sp, FontWeight.Normal, width = 211f)
+        }
+
+        // Тайм-ауты команд в партии (волейбол): светлая точка — тайм-аут ещё остался.
+        if (!isTennis && live.status != "NOT_STARTED") {
+            BoardTimeouts(328f, live.timeoutsUsed.getOrElse(leftIdx) { 0 }, live.timeoutsPerSet, strings.timeoutsLabel)
+            BoardTimeouts(802f, live.timeoutsUsed.getOrElse(rightIdx) { 0 }, live.timeoutsPerSet, strings.timeoutsLabel)
+        }
+
+        // Идущий тайм-аут (30 с) или перерыв на смену сторон (90 с) — карточка с отсчётом по центру.
+        val activeTimer = live.timer
+        if (activeTimer != null && timerMillis > 0L) {
+            val urgent = timerSecs in 1..5
+            Box(
+                Modifier.offset(459.dp, 118.dp).size(211.dp, 128.dp)
+                    .clip(RoundedCornerShape(19.dp)).background(Color(0xFF162C5A)),
+            )
+            BoardText(
+                if (activeTimer.isChangeover) strings.changeoverTitle else strings.timeoutTitle,
+                564.5f, 146f, 20.sp, FontWeight.Bold, width = 205f,
+            )
+            BoardText(
+                formatTime(timerSecs), 564.5f, 192f, 62.sp, FontWeight.Bold, width = 205f,
+                color = if (urgent) Color(0xFFFF6B6B) else Color.White,
+            )
+            if (!activeTimer.isChangeover) {
+                val timeoutTeam = if (activeTimer.team == 1) live.team2 else live.team1
+                BoardText(timeoutTeam.uppercase(), 564.5f, 232f, 20.sp, FontWeight.Normal, width = 195f)
+            }
         }
 
         // Пилюли предпросмотра (только в панели админки, по SVG «Экран предпросмотра»)
         if (preview) {
             Box(
-                Modifier.offset(42.dp, 37.dp).size(230.dp, 53.dp)
+                Modifier.offset(58.dp, 44.dp).size(230.dp, 53.dp)
                     .clip(RoundedCornerShape(26.5.dp)).background(Color(0xFF032351)),
             )
             Box(
-                Modifier.offset(54.dp, 56.dp).size(15.dp)
+                Modifier.offset(70.dp, 63.dp).size(15.dp)
                     .clip(CircleShape).background(Color(0xFFFA4243)),
             )
-            BoardText(strings.preview, 169.3f, 64.9f, 21.sp, FontWeight.Bold, width = 190f)
+            BoardText(strings.preview, 185.3f, 71.9f, 21.sp, FontWeight.Bold, width = 190f)
 
             val chipInteraction = remember { MutableInteractionSource() }
             val chipScale = rememberPressScale(chipInteraction)
             Box(
-                Modifier.offset(857.dp, 37.dp).size(230.dp, 53.dp)
+                Modifier.offset(841.dp, 44.dp).size(230.dp, 53.dp)
                     .graphicsLayer { scaleX = chipScale; scaleY = chipScale }
                     .clip(RoundedCornerShape(26.5.dp)).background(Color(0xFF032351))
                     .hoverable(chipInteraction).pointerHoverIcon(PointerIcon.Hand)

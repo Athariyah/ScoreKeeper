@@ -12,7 +12,14 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -253,6 +260,32 @@ val BloggerSans: FontFamily =
     else FontFamily.SansSerif
 
 /** Blue Curve Bold — цифры счёта (очки/партии) и поля корректировки, 32 sp (см. scoreDigits). */
+/**
+ * Шрифты цифр в играх: «0» — Blue Curve Bold, все остальные цифры (1–9) — Aqum Two.
+ * Буквы и знаки («AD», «:», «+») остаются в шрифте окружающего текста.
+ */
+fun gameNumbers(text: String): AnnotatedString = buildAnnotatedString {
+    for (ch in text) {
+        when (ch) {
+            '0' -> withStyle(ZeroSpan) { append(ch) }
+            in '1'..'9' -> withStyle(DigitSpan) { append(ch) }
+            else -> append(ch)
+        }
+    }
+}
+
+/** То же для полей ввода (BasicTextField.visualTransformation). */
+object GameNumbersTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText =
+        TransformedText(gameNumbers(text.text), OffsetMapping.Identity)
+}
+
+private val ZeroSpan get() = SpanStyle(fontFamily = BlueCurve, fontWeight = FontWeight.Bold)
+private val DigitSpan get() = SpanStyle(
+    fontFamily = AqumTwo,
+    fontWeight = if (aqumLoaded) FontWeight.Normal else FontWeight.Bold,
+)
+
 val BlueCurve: FontFamily =
     if (blueCurveLoaded) FontFamily(Font("fonts/BlueCurve-Bold.ttf", FontWeight.Bold))
     else FontFamily.SansSerif
@@ -364,6 +397,26 @@ class AppStrings(
     val closeWarningLine1: String,
     val closeWarningLine2: String,
     val closeWarningLine3: String, // красная строка («СБРОШЕН»)
+    // Теннис: геймы / сеты
+    val gamesLabel: String,
+    val tennisSetTab: String,
+    val tennisSetsLabel: String,
+    // Тайм-ауты (волейбол) и перерыв на смену сторон (теннис)
+    val timeoutBtn: String,
+    val timeoutsLabel: String,
+    val timeoutTitle: String,
+    val changeoverTitle: String,
+    val changeoverHint: String,
+    val endTimeout: String,
+    val skipBreak: String,
+    val cancelTimeout: String,
+    val autoServe: String,
+    val tiebreakLabel: String,
+    // Обновление приложения
+    val updateTitle: String,
+    val updateBody: String,
+    val updateNow: String,
+    val updateLater: String,
 )
 
 val RuStrings = AppStrings(
@@ -406,6 +459,23 @@ val RuStrings = AppStrings(
     closeWarningLine1 = "ЕСЛИ ВЫ ПОДТВЕРДИТЕ",
     closeWarningLine2 = "ЗАКРЫТИЕ МАТЧА, ТО СЧЁТ БУДЕТ",
     closeWarningLine3 = "СБРОШЕН",
+    gamesLabel = "ГЕЙМЫ",
+    tennisSetTab = "СЕТ",
+    tennisSetsLabel = "СЕТЫ",
+    timeoutBtn = "ТАЙМ-АУТ",
+    timeoutsLabel = "ТАЙМ-АУТЫ",
+    timeoutTitle = "ТАЙМ-АУТ",
+    changeoverTitle = "СМЕНА СТОРОН",
+    changeoverHint = "ИГРОКИ МЕНЯЮТСЯ СТОРОНАМИ",
+    endTimeout = "ЗАВЕРШИТЬ ТАЙМ-АУТ",
+    skipBreak = "ПРОПУСТИТЬ ПЕРЕРЫВ",
+    cancelTimeout = "ОТМЕНИТЬ ТАЙМ-АУТ",
+    autoServe = "АВТОСМЕНА ПОДАЧИ",
+    tiebreakLabel = "ТАЙ-БРЕЙК",
+    updateTitle = "НОВОЕ ОБНОВЛЕНИЕ!",
+    updateBody = "ВЫШЛО НОВОЕ ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ.\nУСТАНОВИТЬ СЕЙЧАС ИЛИ ПОСЛЕ ЗАКРЫТИЯ?",
+    updateNow = "СЕЙЧАС",
+    updateLater = "ПОЗЖЕ",
 )
 
 val EnStrings = AppStrings(
@@ -448,6 +518,23 @@ val EnStrings = AppStrings(
     closeWarningLine1 = "IF YOU CONFIRM",
     closeWarningLine2 = "CLOSING THE MATCH, THE SCORE WILL BE",
     closeWarningLine3 = "RESET",
+    gamesLabel = "GAMES",
+    tennisSetTab = "SET",
+    tennisSetsLabel = "SETS",
+    timeoutBtn = "TIMEOUT",
+    timeoutsLabel = "TIMEOUTS",
+    timeoutTitle = "TIMEOUT",
+    changeoverTitle = "CHANGEOVER",
+    changeoverHint = "PLAYERS SWITCH SIDES",
+    endTimeout = "END TIMEOUT",
+    skipBreak = "SKIP BREAK",
+    cancelTimeout = "CANCEL TIMEOUT",
+    autoServe = "AUTO SERVE CHANGE",
+    tiebreakLabel = "TIEBREAK",
+    updateTitle = "NEW UPDATE!",
+    updateBody = "A NEW VERSION OF THE APP IS OUT.\nINSTALL NOW OR AFTER CLOSING?",
+    updateNow = "NOW",
+    updateLater = "LATER",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings =

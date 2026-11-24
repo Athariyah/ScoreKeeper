@@ -2,7 +2,7 @@ package com.example
 
 import io.ktor.client.*
 import io.ktor.client.call.*
-import io.ktor.client.plugins.ClientRequestException
+import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.plugins.websocket.*
 import io.ktor.client.request.*
@@ -32,12 +32,29 @@ data class ScoreResponse(
     @SerialName("current_set") val currentSet: Int? = null,
     val points: List<Int>? = null,
     @SerialName("points_display") val pointsDisplay: List<String>? = null,
-    val games: List<Int>? = null
+    val games: List<Int>? = null,
+    @SerialName("timeouts_used") val timeoutsUsed: List<Int>? = null,
+    @SerialName("timeouts_per_set") val timeoutsPerSet: Int? = null,
+    val timer: TimerResponse? = null,
+    @SerialName("set_scores") val setScores: List<List<Int>>? = null,
+    val tiebreak: Boolean? = null,
+    @SerialName("auto_serve") val autoServe: Boolean? = null,
+    /** Номер версии состояния (растёт при каждом изменении) — по нему отбрасываем устаревшие ответы. */
+    val revision: Long? = null,
 ) {
     val isFinished: Boolean get() = status == "FINISHED"
     val player1: String get() = players.getOrElse(0) { "" }
     val player2: String get() = players.getOrElse(1) { "" }
 }
+
+/** Идущий тайм-аут (волейбол, 30 с) или перерыв на смену сторон (теннис, 90 с). */
+@Serializable
+data class TimerResponse(
+    val kind: String,
+    val team: Int? = null,
+    val duration: Int,
+    val remaining: Double,
+)
 
 @Serializable
 data class VolleyballMatchConfig(
@@ -66,7 +83,9 @@ data class VolleyballSetScore(
     @SerialName("current_set") val currentSet: Int,
     val server: Int,
     val status: String,
-    val winner: Int? = null
+    val winner: Int? = null,
+    /** Использованные тайм-ауты в текущей партии; null — не менять. */
+    val timeouts: List<Int>? = null,
 )
 
 @Serializable
@@ -76,8 +95,13 @@ data class TennisSetScore(
     @SerialName("sets_won") val setsWon: List<Int>,
     val server: Int,
     val status: String,
-    val winner: Int? = null
+    val winner: Int? = null,
+    /** Автосмена подачи после каждого гейма; null — не менять. */
+    @SerialName("auto_serve") val autoServe: Boolean? = null,
 )
+
+@Serializable
+private data class CancelTimerRequest(val refund: Boolean)
 
 @Serializable
 private data class TextRequest(val text: String)
@@ -88,6 +112,9 @@ private data class TextResponse(val message: String)
 object ApiClient {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; explicitNulls = true; encodeDefaults = true }
     private val client = HttpClient(io.ktor.client.engine.cio.CIO) {
+        // Без этого ответ с ошибкой (404/409/…) молча разбирался бы как успешный счёт и оператор видел
+        // непонятное «Illegal input: Fields [sport, status, …] are required».
+        expectSuccess = true
         install(ContentNegotiation) { json(json) }
         install(WebSockets)
     }
@@ -102,10 +129,17 @@ object ApiClient {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 onResult(block())
-            } catch (e: ClientRequestException) {
-                val text = e.response.bodyAsText()
+            } catch (e: ResponseException) {
+                val text = runCatching { e.response.bodyAsText() }.getOrDefault("")
                 val detail = runCatching { json.parseToJsonElement(text).jsonObject["detail"]?.jsonPrimitive?.content }.getOrNull()
-                val msg = detail ?: "HTTP ${e.response.status.value}: $text"
+                val status = e.response.status.value
+                val msg = when {
+                    // Маршрута нет вообще — работает старая версия бэкенда без новых возможностей.
+                    status == 405 || (status == 404 && detail == "Not Found") ->
+                        "Запущена устаревшая версия бэкенда — перезапустите приложение (нужен бэкенд версии 1.2)"
+                    detail != null -> detail
+                    else -> "HTTP $status: $text"
+                }
                 onError?.invoke(msg); onResult(null)
             } catch (e: Exception) {
                 onError?.invoke(e.message ?: "Сеть недоступна"); onResult(null)
@@ -130,6 +164,16 @@ object ApiClient {
 
     fun addPoint(playerIndex: Int, onResult: (ScoreResponse?) -> Unit, onError: ((String) -> Unit)? = null) = call({
         client.post("$BASE_URL/point") { contentType(ContentType.Application.Json); setBody(AddPointRequest(playerIndex)) }.body()
+    }, onResult, onError)
+
+    /** Тайм-аут команды (волейбол): бэкенд запускает таймер на 30 с и считает лимит 2 в партии. */
+    fun callTimeout(teamIndex: Int, onResult: (ScoreResponse?) -> Unit, onError: ((String) -> Unit)? = null) = call({
+        client.post("$BASE_URL/timeout") { contentType(ContentType.Application.Json); setBody(AddPointRequest(teamIndex)) }.body()
+    }, onResult, onError)
+
+    /** Останавливает тайм-аут / перерыв. refund = true возвращает тайм-аут команде (ошибочное нажатие). */
+    fun cancelTimer(refund: Boolean = false, onResult: (ScoreResponse?) -> Unit, onError: ((String) -> Unit)? = null) = call({
+        client.post("$BASE_URL/timer/cancel") { contentType(ContentType.Application.Json); setBody(CancelTimerRequest(refund)) }.body()
     }, onResult, onError)
 
     fun removePoint(onResult: (ScoreResponse?) -> Unit, onError: ((String) -> Unit)? = null) = call({ client.post("$BASE_URL/remove-point").body() }, onResult, onError)

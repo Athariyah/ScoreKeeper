@@ -1,0 +1,139 @@
+# Сборка Windows-установщика и публикация релиза.
+#
+# Как выпустить новую версию:
+#   1) поднимите версию в frontend/build.gradle.kts (значение по умолчанию для локальной сборки) и README;
+#   2) создайте тег и отправьте его:   git tag v1.2.1 && git push origin v1.2.1
+#      (или создайте релиз с новым тегом на странице Releases — тег отправится сам);
+#   3) Actions соберёт установщик ScoreKeeper-Setup-1.2.1.exe и приложит его к релизу.
+# Приложения у пользователей увидят новую версию и предложат её установить.
+#
+# Ручной запуск (workflow_dispatch) только собирает установщик и кладёт его в «Artifacts» — релиз не публикуется.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Версия для сборки без «v», например 1.2.1"
+        required: true
+
+permissions:
+  contents: write   # нужно, чтобы приложить файлы к релизу
+
+jobs:
+  windows:
+    name: Установщик для Windows
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      EVENT_NAME: ${{ github.event_name }}
+      REF_NAME: ${{ github.ref_name }}
+      INPUT_VERSION: ${{ inputs.version }}
+
+    steps:
+      - name: Получить исходники
+        uses: actions/checkout@v4
+
+      - name: Определить версию
+        id: ver
+        shell: pwsh
+        run: |
+          $version = if ($env:EVENT_NAME -eq 'workflow_dispatch') { $env:INPUT_VERSION } else { $env:REF_NAME }
+          $version = $version -replace '^[vV]', ''
+          # Тег вида v1.2 считаем версией 1.2.0 (jpackage требует три числа).
+          if ($version -match '^\d+\.\d+$') { $version = "$version.0" }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Версия должна быть вида 1.2.3, получено: '$version'"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Собираем версию $version"
+
+      - name: Установить Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Установить Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      # ── бэкенд ──
+      - name: Зависимости бэкенда
+        shell: pwsh
+        run: python -m pip install -r backend/requirements.txt pyinstaller
+
+      - name: Тесты бэкенда
+        shell: pwsh
+        run: python -m unittest discover -s backend/src/tests
+
+      - name: Собрать бэкенд (PyInstaller)
+        shell: pwsh
+        run: pyinstaller ScoreKeeperBackend.spec
+
+      # ── фронтенд ──
+      - name: Собрать фронтенд (Compose Desktop)
+        shell: pwsh
+        working-directory: frontend
+        env:
+          APP_VERSION: ${{ steps.ver.outputs.version }}
+        run: .\gradlew.bat --no-daemon createDistributable "-PappVersion=$env:APP_VERSION" "-PgithubRepo=$env:GITHUB_REPOSITORY"
+
+      # ── лаунчер и папка релиза ──
+      - name: Собрать лаунчер и папку релиза
+        shell: pwsh
+        run: |
+          $release = 'ScorekeeperAppRelease'
+          New-Item -ItemType Directory -Force "$release\BackendRelease", "$release\FrontendRelease" | Out-Null
+
+          $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+          & $csc /nologo /target:winexe "/out:$release\ScoreKeeper.exe" "/win32icon:frontend\src\main\resources\app_icon.ico" /reference:System.Windows.Forms.dll tools\windows\ScoreKeeperLauncher.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Не удалось собрать лаунчер' }
+
+          # лаунчер и установщик ждут бэкенд под именем ScoreKeeperAppBackend.exe
+          Copy-Item dist\ScoreKeeperBackend.exe "$release\BackendRelease\ScoreKeeperAppBackend.exe"
+          Copy-Item frontend\build\compose\binaries\main\app\ScoreKeeper "$release\FrontendRelease" -Recurse
+
+      # ── установщик ──
+      - name: Установить Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Собрать установщик
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          & $iscc "/DAppVersion=$env:APP_VERSION" tools\windows\ScoreKeeperInstaller.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup завершился с ошибкой' }
+
+          $setup = Get-Item "installer-output\ScoreKeeper-Setup-$env:APP_VERSION.exe"
+          $hash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLower()
+          # формат sha256sum: «<хэш>  <имя файла>» — приложение сверяет им скачанный установщик
+          Set-Content -Path "$($setup.FullName).sha256" -Value "$hash  $($setup.Name)" -Encoding ascii
+          Write-Host "$($setup.Name): $hash"
+
+      - name: Сохранить установщик как артефакт сборки
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScoreKeeper-Setup-${{ steps.ver.outputs.version }}
+          path: |
+            installer-output/ScoreKeeper-Setup-*.exe
+            installer-output/ScoreKeeper-Setup-*.exe.sha256
+
+      - name: Приложить установщик к релизу
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            installer-output/ScoreKeeper-Setup-*.exe
+            installer-output/ScoreKeeper-Setup-*.exe.sha256
+          generate_release_notes: true
+          fail_on_unmatched_files: true
